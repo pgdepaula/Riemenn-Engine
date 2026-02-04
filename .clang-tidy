@@ -1,0 +1,19 @@
+---
+Checks:          'clang-diagnostic-*,clang-analyzer-*,bugprone-*,performance-*,portability-*,readability-redundant-*,readability-inconsistent-declaration-parameter-name,readability-misleading-indentation'
+WarningsAsErrors: 'clang-diagnostic-*,clang-analyzer-*,bugprone-*,performance-*,portability-*'
+HeaderFilterRegex: '.*'
+AnalyzeTemporaryDtors: false
+FormatStyle:     file
+CheckOptions:
+  - key:             readability-identifier-naming.VariableCase
+    value:           lower_case
+  - key:             readability-identifier-naming.FunctionCase
+    value:           lower_case
+  - key:             readability-identifier-naming.StructCase
+    value:           lower_case
+  - key:             readability-identifier-naming.GlobalConstantCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.MacroDefinitionCase
+    value:           UPPER_CASE
+...
+e

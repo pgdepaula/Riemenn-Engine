@@ -1,0 +1,26 @@
+CompileFlags:
+  Add: 
+    - "-Isrc"
+    - "-std=gnu17"
+    - "-Wall"
+    - "-Wextra"
+    - "-Wpedantic"
+    - "-Werror"
+    - "-Wno-unused-parameter"
+    - "-Wno-missing-field-initializers" 
+    - "-DBHS_DEBUG"
+    - "-D_GNU_SOURCE"
+
+Diagnostics:
+  Suppress: 
+    - "unused-function" # Stubs are common in this stage
+    - "type-limits"     # Common in low-level bitwise ops
+
+InlayHints:
+  Designators: true
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
+
+Hover:
+  ShowAKA: true

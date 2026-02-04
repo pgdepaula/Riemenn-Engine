@@ -1,0 +1,41 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# Top-most EditorConfig file
+root = true
+
+# Unix-style newlines with a newline ending every file
+[*]
+end_of_line = lf
+insert_final_newline = true
+charset = utf-8
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Kernel C Style: Tabs, 8 spaces width
+[*.{c,h,cpp,hpp,cc}]
+indent_style = tab
+indent_size = 8
+tab_width = 8
+max_line_length = 80
+
+# Makefiles always use tabs
+[{Makefile,*.mk}]
+indent_style = tab
+tab_width = 8
+
+# Rust: 4 spaces
+[*.rs]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# Web/Config/Docs: 2 spaces
+[*.{json,yaml,yml,md,html,css,js,ts}]
+indent_style = space
+indent_size = 2
+
+# Shell scripts
+[*.sh]
+indent_style = tab
+tab_width = 4

@@ -1,0 +1,542 @@
+#version 450
+
+/*
+ * blackhole.comp - Shader de Computação para Simulação de Buracos Negros
+ *
+ * "A gravidade não é uma força, é a curvatura do espaço-tempo."
+ * - Albert Einstein (enquanto derivava as equações de campo)
+ *
+ * VERSÃO 2.0 - KERR EDITION
+ * 
+ * Agora com:
+ * - Métrica de Kerr (buraco negro rotativo)
+ * - Integração RK4 para geodésicas
+ * - Redshift Doppler relativístico
+ * - Beaming e frame dragging
+ * - Disco de acreção modelo Novikov-Thorne
+ */
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+/* Output: Textura de cor */
+layout(set = 0, binding = 0, rgba32f) uniform image2D output_image;
+
+/* Parâmetros do Buraco Negro - Versão Kerr */
+layout(push_constant) uniform PushConstants {
+    float time;
+    float mass;           /* Massa M (normalizada) */
+    float spin;           /* Parâmetro de spin a/M (0 = Schwarzschild, 1 = extremo) */
+    float camera_dist;    /* Distância da câmera */
+    float camera_angle;   /* Ângulo horizontal da câmera */
+    float camera_incl;    /* Inclinação da câmera (0 = polo, π/2 = equador) */
+    vec2 resolution;      /* Tamanho da imagem */
+    int render_mode;      /* 0 = Physics, 1 = Grid */
+} params;
+
+/* ... (linhas omitidas para brevidade, vou focar só no replace das partes) ... */
+/* Ah, replace_file_content não suporta multiplos chunks distantes bem se o arquivo for grande? */
+/* Vou fazer 2 calls separados para garantir. */
+/* Call 1: Struct PushConstants (linhas 25-33) */
+/* Call 2: trace_ray logic (linhas 260-270) */
+
+/* Constantes físicas */
+const float PI = 3.14159265359;
+const float TWO_PI = 6.28318530718;
+const int MAX_STEPS = 256;
+const float STEP_SIZE = 0.03;
+
+/* ============================================================================
+ * MÉTRICA DE KERR
+ * ============================================================================
+ */
+
+/* Função Σ = r² + a²cos²θ */
+float kerr_Sigma(float r, float theta, float a) {
+    float cos_theta = cos(theta);
+    return r * r + a * a * cos_theta * cos_theta;
+}
+
+/* Função Δ = r² - 2Mr + a² */
+float kerr_Delta(float r, float M, float a) {
+    return r * r - 2.0 * M * r + a * a;
+}
+
+/* Horizonte de eventos externo r+ */
+float kerr_horizon(float M, float a) {
+    return M + sqrt(M * M - a * a);
+}
+
+/* ISCO prograde (aproximação) */
+float kerr_isco(float M, float a) {
+    float chi = a / M;
+    if (abs(chi) < 0.01) return 6.0 * M;
+    
+    /* Fórmula de Bardeen-Press-Teukolsky simplificada */
+    float Z1 = 1.0 + pow(1.0 - chi*chi, 1.0/3.0) * 
+               (pow(1.0 + chi, 1.0/3.0) + pow(1.0 - chi, 1.0/3.0));
+    float Z2 = sqrt(3.0 * chi*chi + Z1*Z1);
+    return M * (3.0 + Z2 - sqrt((3.0 - Z1) * (3.0 + Z1 + 2.0*Z2)));
+}
+
+/* Velocidade angular Kepleriana */
+float kerr_omega_kepler(float r, float M, float a) {
+    float sqrtM = sqrt(M);
+    return sqrtM / (pow(r, 1.5) + a * sqrtM);
+}
+
+/* Velocidade angular do frame dragging */
+float kerr_omega_frame(float r, float theta, float M, float a) {
+    float Sigma = kerr_Sigma(r, theta, a);
+    float Delta = kerr_Delta(r, M, a);
+    float sin2 = sin(theta) * sin(theta);
+    float r2a2 = r*r + a*a;
+    
+    return 2.0 * M * a * r / (r2a2 * r2a2 - a*a * Delta * sin2);
+}
+
+/* ============================================================================
+ * INTEGRAÇÃO DE GEODÉSICAS - RK4
+ * ============================================================================
+ */
+
+/* Aceleração geodésica (aproximação para Kerr) */
+vec3 geodesic_accel(vec3 pos, vec3 vel, float M, float a) {
+    float r = length(pos);
+    float theta = acos(pos.z / r);
+    
+    float Sigma = kerr_Sigma(r, theta, a);
+    float Delta = kerr_Delta(r, M, a);
+    
+    /* Aproximação: usa potencial efetivo de Kerr */
+    float rs = 2.0 * M;
+    float r2 = r * r;
+    
+    /* Termo gravitacional principal */
+    vec3 r_hat = normalize(pos);
+    float grav = rs / (2.0 * r2);
+    
+    /* Correção relativística (1.5 rs/r vem de GR) */
+    grav *= (1.0 + 1.5 * rs / r);
+    
+    /* Correção de frame dragging (afeta movimento tangencial) */
+    float omega_fd = kerr_omega_frame(r, theta, M, a);
+    vec3 z_hat = vec3(0.0, 0.0, 1.0);
+    vec3 drag = omega_fd * cross(z_hat, vel) * 0.1;  /* Fator reduzido para estabilidade */
+    
+    return -r_hat * grav + drag;
+}
+
+/* RK4 Step Primitive - Single iteration */
+void rk4_single_step(inout vec3 pos, inout vec3 vel, float M, float a, float h) {
+    /* k1 */
+    vec3 k1_vel = geodesic_accel(pos, vel, M, a);
+    vec3 k1_pos = vel;
+    
+    /* k2 */
+    vec3 pos2 = pos + 0.5 * h * k1_pos;
+    vec3 vel2 = vel + 0.5 * h * k1_vel;
+    vec3 k2_vel = geodesic_accel(pos2, vel2, M, a);
+    vec3 k2_pos = vel2;
+    
+    /* k3 */
+    vec3 pos3 = pos + 0.5 * h * k2_pos;
+    vec3 vel3 = vel + 0.5 * h * k2_vel;
+    vec3 k3_vel = geodesic_accel(pos3, vel3, M, a);
+    vec3 k3_pos = vel3;
+    
+    /* k4 */
+    vec3 pos4 = pos + h * k3_pos;
+    vec3 vel4 = vel + h * k3_vel;
+    vec3 k4_vel = geodesic_accel(pos4, vel4, M, a);
+    vec3 k4_pos = vel4;
+    
+    /* Update */
+    pos += (h / 6.0) * (k1_pos + 2.0*k2_pos + 2.0*k3_pos + k4_pos);
+    vel += (h / 6.0) * (k1_vel + 2.0*k2_vel + 2.0*k3_vel + k4_vel);
+}
+
+/* Adaptive RK4 Step (Step Doubling Method) 
+ * Tenta dar um passo 'h'. Se o erro for alto, reduz h e tenta de novo.
+ * Retorna o tamanho real do passo dado.
+ */
+float rk4_adaptive_step(inout vec3 pos, inout vec3 vel, float M, float a, inout float h) {
+    const float TOLERANCE = 1e-4;
+    const float SAFETY = 0.9;
+    
+    /* Backup state */
+    vec3 p0 = pos;
+    vec3 v0 = vel;
+    
+    for (int retry = 0; retry < 4; retry++) {
+        /* 1. Full Step (h) */
+        vec3 p1 = p0;
+        vec3 v1 = v0;
+        rk4_single_step(p1, v1, M, a, h);
+        
+        /* 2. Two Half Steps (h/2 + h/2) */
+        vec3 p2 = p0;
+        vec3 v2 = v0;
+        float h_half = h * 0.5;
+        rk4_single_step(p2, v2, M, a, h_half);
+        rk4_single_step(p2, v2, M, a, h_half);
+        
+        /* 3. Error Estimate (Richardson Extrapolation) */
+        float err_pos = length(p2 - p1);
+        float err_vel = length(v2 - v1);
+        float err = max(err_pos, err_vel);
+        
+        /* Aceita o passo? */
+        if (err < TOLERANCE) {
+            /* Richardson correction: melhora a ordem final para 5ª ordem */
+            /* P_corrected = p2 + (p2 - p1) / 15 */
+            pos = p2 + (p2 - p1) / 15.0;
+            vel = v2 + (v2 - v1) / 15.0;
+            
+            /* Ajusta h para o PRÓXIMO passo (aumenta se erro foi muito baixo) */
+            /* Evita aumentar demais pra não perder detalhes finos do disco */
+            float next_h = h * SAFETY * pow(TOLERANCE / (err + 1e-10), 0.2);
+            next_h = min(next_h, h * 2.0);
+            h = next_h;
+            
+            return h; /* Sucesso */
+        }
+        
+        /* Rejeita e reduz h */
+        h *= 0.5;
+    }
+    
+    /* Se falhar muito, força o passo pequeno (melhor avançar que travar) */
+    rk4_single_step(pos, vel, M, a, h);
+    return h;
+}
+
+/* ============================================================================
+ * DISCO DE ACREÇÃO - NOVIKOV-THORNE
+ * ============================================================================
+ */
+
+/* Temperatura do disco (normalizada 0-1) */
+float disk_temperature(float r, float r_isco, float r_outer) {
+    if (r < r_isco || r > r_outer) return 0.0;
+    
+    /* T ∝ r^(-3/4) com fator relativístico */
+    float Q = 1.0 - sqrt(r_isco / r);
+    return pow(r_isco / r, 0.75) * pow(Q, 0.25);
+}
+
+/* Redshift Doppler total */
+float disk_redshift(float r, float phi, float M, float a, float inclination) {
+    /* Redshift gravitacional aproximado */
+    float rs = 2.0 * M;
+    float z_grav = 1.0 / sqrt(1.0 - rs / r) - 1.0;
+    
+    /* Velocidade orbital */
+    float v_phi = r * (kerr_omega_kepler(r, M, a) - kerr_omega_frame(r, PI/2.0, M, a));
+    
+    /* Projeção na linha de visão */
+    float v_los = v_phi * sin(phi) * sin(inclination);
+    
+    /* Doppler relativístico (aproximação) */
+    float z_doppler = -v_los;
+    
+    return (1.0 + z_grav) * (1.0 + z_doppler) - 1.0;
+}
+
+/* Cor de corpo negro */
+vec3 blackbody_color(float temp) {
+    /* Mapa de cores: vermelho → laranja → amarelo → branco → azulado */
+    vec3 color;
+    
+    if (temp < 0.2) {
+        color = vec3(temp * 2.5, 0.0, 0.0);
+    } else if (temp < 0.4) {
+        float t = (temp - 0.2) * 5.0;
+        color = vec3(0.5 + t * 0.5, t * 0.4, 0.0);
+    } else if (temp < 0.6) {
+        float t = (temp - 0.4) * 5.0;
+        color = vec3(1.0, 0.4 + t * 0.4, t * 0.1);
+    } else if (temp < 0.8) {
+        float t = (temp - 0.6) * 5.0;
+        color = vec3(1.0, 0.8 + t * 0.2, 0.1 + t * 0.7);
+    } else {
+        float t = (temp - 0.8) * 5.0;
+        color = vec3(1.0 - t * 0.1, 1.0, 0.8 + t * 0.2);
+    }
+    
+    return color;
+}
+
+/* Cor do disco com redshift */
+vec3 disk_color(float r, float phi, float M, float a, float inclination, float r_isco) {
+    float temp = disk_temperature(r, r_isco, 15.0);
+    if (temp < 0.001) return vec3(0.0);
+    
+    vec3 base_color = blackbody_color(temp);
+    
+    /* Redshift */
+    float z = disk_redshift(r, phi, M, a, inclination);
+    
+    /* Fator de beaming g^4 */
+    float g = 1.0 / (1.0 + z);
+    float brightness = pow(clamp(g, 0.1, 3.0), 4.0);
+    
+    /* Deslocamento de cor */
+    vec3 shifted_color;
+    if (z < 0.0) {
+        /* Blueshift */
+        float shift = min(-z * 0.3, 0.5);
+        shifted_color.r = base_color.r * (1.0 - shift);
+        shifted_color.g = base_color.g;
+        shifted_color.b = base_color.b + shift * (1.0 - base_color.b);
+    } else {
+        /* Redshift */
+        float shift = min(z * 0.3, 0.5);
+        shifted_color.r = base_color.r + shift * (1.0 - base_color.r);
+        shifted_color.g = base_color.g * (1.0 - shift * 0.5);
+        shifted_color.b = base_color.b * (1.0 - shift);
+    }
+    
+    return shifted_color * brightness * temp;
+}
+
+/* Gravity Well Visualization (Newtonian Embedding) 
+ * Fiel à imagem: azul-cinza claro, fundo preto, curvatura suave.
+ */
+vec3 gravity_well_color(vec3 p, float grid_intensity) {
+    /* Fundo preto absoluto */
+    vec3 base = vec3(0.0); 
+    
+    /* Grid lines - Ajustando o espaçamento para ser denso como na imagem */
+    float spacing = 0.5;
+    float thickness = 0.015;
+    
+    /* Anti-aliasing manual básico para as linhas */
+    float gx = abs(fract(p.x / spacing) - 0.5) * spacing;
+    float gy = abs(fract(p.y / spacing) - 0.5) * spacing;
+    
+    float line = smoothstep(thickness, 0.0, min(gx, gy));
+    
+    if (line > 0.0) {
+        /* Cor da malha: Azul-cinza gélido / Ciano desbotado (#A0C0FF-ish) */
+        vec3 grid_color = vec3(0.4, 0.55, 0.7); 
+        
+        /* Intensidade baseada na distância para dar profundidade */
+        float dist_fade = exp(-length(p.xy) * 0.05);
+        return mix(base, grid_color, line * dist_fade * grid_intensity);
+    }
+    
+    return base;
+}
+
+/* Ray march against height field z = -Sum(M_i / r_i) */
+float get_gravity_height(vec2 p) {
+    /* Apenas a curvatura central para foco total na malha */
+    float sun_pos = 0.0;
+    float sun_mass = 4.0;
+    
+    float h = -sun_mass / (length(p) + 0.5);
+    
+    /* Atenuação suave para as bordas ficarem planas */
+    float falloff = exp(-length(p) * 0.02);
+    return h * falloff;
+}
+
+/* ============================================================================
+ * VOLUMETRIC DISK LOGIC
+ * ============================================================================
+ */
+
+/* Densidade do disco em (r, z) */
+float disk_density(vec3 pos, float r_isco) {
+    float r = length(pos);
+    if (r < r_isco || r > 18.0) return 0.0;
+    
+    /* Perfil vertical: Gaussiano z ~ exp(-z^2 / 2h^2)
+     * Altura do disco (h) aumenta com raio (flaring) */
+    float h_disk = 0.05 + 0.04 * r;
+    float z_factor = exp(-0.5 * (pos.z * pos.z) / (h_disk * h_disk));
+    
+    /* Perfil radial: denso perto do ISCO, cai suavemente */
+    float r_factor = exp(-(r - r_isco) * 0.3);
+    
+    return 2.0 * z_factor * r_factor; /* Densidade base */
+}
+
+vec3 trace_gravity_well_scene(vec3 ro, vec3 rd) {
+    /* 1. SÓ A MALHA - Ordem do usuário: "SEM PLANETAS POR ENQUANTO" */
+    
+    /* Raymarching da superfície da malha */
+    float t = 0.0;
+    float dt = 0.1;
+    vec3 p;
+    
+    for(int i=0; i<120; i++) {
+        p = ro + t * rd;
+        float surface_h = get_gravity_height(p.xy);
+        
+        if (p.z < surface_h) {
+            /* Refinamento binário rápido para precisão da linha */
+            for(int j=0; j<4; j++) {
+                dt *= 0.5;
+                if (p.z < surface_h) t -= dt; else t += dt;
+                p = ro + t * rd;
+                surface_h = get_gravity_height(p.xy);
+            }
+            return gravity_well_color(p, 1.0);
+        }
+        
+        float diff = p.z - surface_h;
+        t += max(diff * 0.6, 0.05);
+        if (t > 100.0) break;
+    }
+
+    return vec3(0.0); /* Espaço profundo negro */
+}
+
+/* ============================================================================
+ * RAY TRACING PRINCIPAL
+ * ============================================================================
+ */
+
+vec3 trace_ray(vec3 origin, vec3 dir, float M, float a, float inclination) {
+    vec3 pos = origin;
+    vec3 vel = normalize(dir);
+    
+    float r_horizon = kerr_horizon(M, a);
+    float r_isco = kerr_isco(M, a);
+    
+    float current_h = STEP_SIZE; 
+    
+    vec3 accumulated_color = vec3(0.0);
+    float transmittance = 1.0;
+    
+    for (int i = 0; i < MAX_STEPS; i++) {
+        float r = length(pos);
+        
+        /* Capturado pelo horizonte */
+        if (r < r_horizon * 1.05) {
+            /* Sombra negra absoluta */
+            return accumulated_color;
+        }
+        
+        /* Escapou para o infinito */
+        if (r > 60.0) {
+            vec3 bg_color = vec3(0.01); /* Fallback simples */
+            
+            /* (Reintegração do código de fundo estrelado aqui se necessário, 
+               mas simplificando para focar no volume) */
+             if (params.render_mode == 1) {
+                 /* ... grid logic ... */
+                 return vec3(0.0, 0.1, 0.2) * transmittance + accumulated_color;
+             }
+             
+             /* Estrelas */
+             vec3 final_dir = normalize(vel);
+             float stars = step(0.998, fract(sin(dot(final_dir.xy, vec2(12.9898, 78.233))) * 43758.5453));
+             bg_color += vec3(stars);
+
+             return accumulated_color + bg_color * transmittance;
+        }
+        
+        /* 1. Avança passo físico (RK4 Adaptativo) */
+        vec3 prev_pos = pos;
+        float actual_step = rk4_adaptive_step(pos, vel, M, a, current_h);
+        
+        /* 2. Integração Volumétrica no segmento (prev_pos -> pos) */
+        vec3 mid_pos = (prev_pos + pos) * 0.5;
+        float mid_r = length(mid_pos);
+        
+        /* Só calcula se estiver perto do plano do disco para economizar */
+        if (abs(mid_pos.z) < 2.0 && mid_r > r_isco && mid_r < 20.0) {
+            float density = disk_density(mid_pos, r_isco);
+            
+            if (density > 0.001) {
+                float phi = atan(mid_pos.y, mid_pos.x);
+                
+                /* Emission: Temperature + Doppler */
+                vec3 emission = disk_color(mid_r, phi, M, a, inclination, r_isco);
+                
+                /* Absorption: Beer's Law */
+                float sigma_a = 0.8; /* Coeficiente de absorção */
+                float segment_len = length(pos - prev_pos); // = actual_step (aprox)
+                
+                /* Optical depth do segmento */
+                float d_tau = density * sigma_a * segment_len;
+                
+                /* Accumulate */
+                accumulated_color += emission * density * segment_len * transmittance;
+                transmittance *= exp(-d_tau);
+                
+                if (transmittance < 0.01) break; /* Opaque start */
+            }
+        }
+    }
+    
+    return accumulated_color;
+}
+
+/* ============================================================================
+ * MAIN
+ * ============================================================================
+ */
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    
+    if (pixel.x >= int(params.resolution.x) || pixel.y >= int(params.resolution.y)) {
+        return;
+    }
+    
+    /* Coordenadas normalizadas [-1, 1] */
+    vec2 uv = (vec2(pixel) / params.resolution) * 2.0 - 1.0;
+    uv.x *= params.resolution.x / params.resolution.y;
+    
+    /* Parâmetros do buraco negro */
+    float M = params.mass;
+    float a = params.spin * M;  /* a = spin * M */
+    
+    /* Mode 2 Override: Fixed camera position for "look like image" */
+    vec3 cam_pos;
+    vec3 cam_target;
+    
+    if (params.render_mode == 2) {
+         cam_pos = vec3(10.0, -10.0, 8.0);
+         cam_target = vec3(2.0, 0.0, -2.0);
+    } else {
+        float cam_dist = params.camera_dist;
+        float cam_angle = params.camera_angle;
+        float cam_incl = params.camera_incl;
+        cam_pos = vec3(
+            cam_dist * sin(cam_incl) * cos(cam_angle),
+            cam_dist * sin(cam_incl) * sin(cam_angle),
+            cam_dist * cos(cam_incl)
+        );
+        cam_target = vec3(0.0, 0.0, 0.0);
+    }
+    
+    vec3 cam_up = vec3(0.0, 0.0, 1.0);
+    vec3 cam_dir = normalize(cam_target - cam_pos);
+    vec3 cam_right = normalize(cross(cam_dir, cam_up));
+    vec3 cam_up_real = cross(cam_right, cam_dir);
+    
+    /* Ray from camera */
+    float fov = 1.0;
+    vec3 ray_dir = normalize(cam_dir + uv.x * cam_right * fov + uv.y * cam_up_real * fov);
+    
+    vec3 color;
+    
+    if (params.render_mode == 2) {
+        color = trace_gravity_well_scene(cam_pos, ray_dir);
+    } else {
+        color = trace_ray(cam_pos, ray_dir, M, a, params.camera_incl);
+    }
+    
+    /* 
+     * RAW HDR OUTPUT for Post-Processing
+     * Tone mapping e Gamma são aplicados no postprocess.comp
+     */
+    imageStore(output_image, pixel, vec4(color, 1.0));
+}
+
+
+// eu sebo demais - Einstein, Albert. Bahia, 1945.

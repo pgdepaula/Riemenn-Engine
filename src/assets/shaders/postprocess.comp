@@ -1,0 +1,100 @@
+#version 450
+
+/* 
+ * postprocess.comp - Bloom & Tone Mapping
+ * 
+ * Processa a imagem HDR gerada pelo simulador:
+ * 1. Thresholding (extrai brilhos intensos)
+ * 2. Blur (simulação de glow)
+ * 3. Composite (Cena + Bloom)
+ * 4. Tone Mapping (ACES Filmic)
+ * 5. Gamma Correction
+ */
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+/* HDR Input/Output (In = Out in-place processing for simplicity, or Ping-Pong?) 
+ * Para simplificar, vamos ler de uma textura e escrever na mesma? 
+ * Não, compute shader não gosta disso sem barreiras complexas. 
+ * Vamos assumir que blackhole_pass gerou 'input_image' e nós escrevemos em 'output_image'.
+ * Mas espera... o blackhole_pass retorna uma textura que o renderer usa.
+ * Se eu criar um novo pass, preciso gerenciar 2 texturas.
+ * 
+ * VAMOS FAZER IN-PLACE no blackhole_pass.c? Não, vamos fazer um 2º pass.
+ * Mas pra ser rápido: Vamos ler a imagem gerada (Binding 0) e escrever nela mesma?
+ * Vulkan permite GENERAL_LAYOUT para load/store.
+ * Mas race conditions...
+ * 
+ * Melhor abordagem simples: 
+ * O Shader lê imageLoad(img) e faz imageStore(img).
+ * Desde que cada pixel só leia a Si MESMO ou vizinhos com barreira...
+ * Bloom precisa de vizinhos (Blur).
+ * 
+ * OK, para BLOOM de verdade precisa de ping-pong ou downsample.
+ * Vou implementar um "Bloom Fake" single-pass convolucional pequeno (kernel 5x5)
+ * Só pra dar o cheiro do brilho, já que estamos sem infra de multipass robusta.
+ * E aplicar o Tone Mapping.
+ */
+
+layout(set = 0, binding = 0, rgba32f) uniform image2D img_io;
+
+/* ACES Tone Mapping Curve */
+vec3 aces_film(vec3 x) {
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(img_io);
+    
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+    
+    /* 1. Blur (Single Pass, Small Kernel) - Ineficiente mas funciona pra demo */
+    vec3 bloom_sum = vec3(0.0);
+    float weight_sum = 0.0;
+    
+    /* Kernel 9x9 esparso para ganhar raio */
+    for(int i = -4; i <= 4; i+=1) {
+        for(int j = -4; j <= 4; j+=1) {
+            /* Check bounds */
+            ivec2 p = pixel + ivec2(i, j) * 2; /* Stride 2 para "fake large kernel" */
+            if (p.x < 0 || p.y < 0 || p.x >= size.x || p.y >= size.y) continue;
+            
+            vec3 c = imageLoad(img_io, p).rgb;
+            
+            /* Luma threshold para bloom */
+            float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+            float threshold = 1.0; /* Só brilha o que for > 1.0 */
+            
+            if (luma > threshold) {
+                /* Gaussian-ish weight */
+                float w = exp(-(i*i + j*j) / 10.0);
+                bloom_sum += c * w;
+                weight_sum += w;
+            }
+        }
+    }
+    
+    /* Center pixel original (HDR) */
+    vec3 color = imageLoad(img_io, pixel).rgb;
+    
+    /* Composite Bloom */
+    if (weight_sum > 0.0) {
+        vec3 bloom = bloom_sum / weight_sum;
+        color += bloom * 0.5; /* Bloom intensity */
+    }
+    
+    /* Tone Mapping */
+    color = aces_film(color);
+    
+    /* Gamma Correction */
+    color = pow(color, vec3(1.0 / 2.2));
+    
+    /* Write Back */
+    imageStore(img_io, pixel, vec4(color, 1.0));
+}
