@@ -1,87 +1,199 @@
-# Riemenn-Engine
+# Riemann Engine
 
-Engine (Motor gráfico) & Jogo/App de simulação espacial.
+Motor gráfico multiplataforma e simulador espacial de alta precisão, desenvolvido em C.
 
-### **Sobre o projeto sinistrasso:**
+O projeto combina uma engine própria de renderização com uma aplicação de simulação astronômica baseada em modelos físicos e matemáticos utilizados na mecânica orbital moderna.
 
-* Simulação do sistema solar real, iniciando no periodo padrão (Nasa J2000) e mudando a data para a atual, por exemplo, o simulador calculará a posicão exata dos planetas do dia atual.
-  
-* Niveis técnicos e didáticos que nao afetam funcionamento: Tamanhos e distancias reais **OU** Tamanhos e distancias humanamente compreensiveis, para entendimento didático real e factual sem dificuldades.
-  
-* Dados e estatisticas reais! O simulador nao sabe que um ano terrestre dura 365 dias, ou o que é um ano bissexto, ele calcula em tempo real o fim da translação da terra e nos da o resultados em dias humanos; o principal foco do simulador é esse! ELe nao trabalha com quase nenhuma instrução, ele calcula! Outro exemplo é que ele não sabe que a terra custuma se aproximar do sól em certos periodos, mas ele calcula em tempo real e devolve o resultado na sua tela, completamente compativel com a realidade!
+---
 
-* Isso se deve aos calculos como os de Riemenn, Einsten (relatividade e espaço/tempo) e alguns de Hawking. São os mesmos calculos que nos possibilitam saber de informaçoes interestelares, é como uma visualização real das contas de lousa.
-  
-* Existem outros softwares didaticos da Nasa e SpaceX que fazem a mesma coisa, com foco didático, mas não focados em engenharia de software.
+## Visão Geral
 
+O objetivo da Riemann Engine é representar o Sistema Solar com fidelidade científica, calculando posições, distâncias e fenômenos orbitais em tempo real a partir de dados astronômicos reais.
 
-### **Técnico (Parte chata, ou a parte mais legal dependendo da sua area):**
+Diferentemente de simuladores baseados em tabelas estáticas ou eventos pré-programados, o sistema prioriza cálculos físicos e matemáticos para obter resultados diretamente da simulação.
 
-* Baseado em C puro (por hobby, ou loucura, fica a seu critério), com HAL (Abstração de Hardware) e PAL (Abstração de Plataforma).
-  
-* Usa Backends para Vulkan, OpenGL, Direct3D e Metal; sendo Metal e Vulkan os mais estáveis. Estas são bibliotecas de baixo nivel para placa de video/GPU que permitem renderização gráfica em plataformas.
-  
-* Possui PAL para renderização em Windows (Via Win32, essa API tenebrosa), Apple (via Cocoa e WebKit) e para sistemas como linux usando os ambientes Wayland e X11.
-  
-* A arquitetura do software é focada em otimização enorme para melhor aplicação no hardware do usuário, como por exemplo: Usar GPU para calcular gravidade e fisica se disponivel **OU** Usar outros núcleos da CPU para isso, fazendo uma simulação perfeita pro usuário.
-  
-* Bibliotecas nativas: Basicamente nenhuma biblioteca adicional/externa (se considerarmos as APIs de renderização e Plataforma como obrigatórias)
-  
-* Roda em navegadores modernos via WebAssembly e WebGPU!
+### Principais características
 
+* Simulação do Sistema Solar baseada no padrão astronômico J2000.
+* Cálculo de posições planetárias para datas passadas, atuais e futuras.
+* Escala física real ou escala adaptada para visualização didática.
+* Dados orbitais calculados em tempo real.
+* Estatísticas derivadas da própria simulação.
+* Renderização acelerada por GPU.
+* Execução nativa em desktop e navegadores modernos.
 
+---
 
-# Setup 
+## Precisão Científica
 
-**Compile com cmake (recomendado) ou rode o wrapper Make (Menos configuravel.)**
+A engine não depende de conhecimento pré-programado sobre eventos astronômicos específicos.
 
+Por exemplo:
+
+* Não existe uma regra interna dizendo que um ano terrestre possui aproximadamente 365 dias.
+* Não existe uma regra dizendo quando a Terra estará mais próxima ou mais distante do Sol.
+
+Essas informações são obtidas a partir dos cálculos orbitais executados durante a simulação.
+
+Isso permite que diversos dados sejam derivados diretamente dos modelos matemáticos utilizados pelo sistema, produzindo resultados compatíveis com observações astronômicas reais.
+
+Os fundamentos incluem conceitos presentes em áreas como:
+
+* Mecânica orbital
+* Gravitação clássica
+* Relatividade
+* Dinâmica de sistemas
+
+O objetivo é transformar modelos normalmente vistos em artigos científicos, livros e quadros de aula em uma representação visual e interativa.
+
+---
+
+# Arquitetura
+
+A engine foi construída com foco em portabilidade, desempenho e baixo nível de abstração.
+
+## Linguagem
+
+* C (ISO C)
+
+## Camadas principais
+
+### HAL (Hardware Abstraction Layer)
+
+Responsável por abstrair recursos específicos do hardware.
+
+### PAL (Platform Abstraction Layer)
+
+Responsável por abstrair sistemas operacionais, janelas, entrada e integração com plataformas.
+
+---
+
+## APIs Gráficas
+
+A engine suporta múltiplos backends de renderização:
+
+| API      | Status          |
+| -------- | --------------- |
+| Vulkan   | Principal       |
+| Metal    | Principal       |
+| OpenGL   | Compatibilidade |
+| Direct3D | Compatibilidade |
+
+Essas APIs são utilizadas diretamente através da camada de abstração da engine.
+
+---
+
+## Plataformas Suportadas
+
+| Plataforma            | Backend padrão |
+| --------------------- | -------------- |
+| Linux (Wayland)       | Vulkan         |
+| Linux (X11)           | Vulkan         |
+| FreeBSD (Wayland)     | Vulkan         |
+| FreeBSD (X11)         | Vulkan         |
+| Windows               | Direct3D       |
+| macOS (Apple Silicon) | Metal          |
+| macOS (Intel)         | Metal          |
+| WebAssembly/WebGPU    | WebGPU         |
+
+---
+
+## Paralelismo e Desempenho
+
+A arquitetura foi projetada para aproveitar ao máximo os recursos disponíveis da máquina.
+
+Dependendo da plataforma e configuração:
+
+* Processamento físico pode ser executado na GPU.
+* Simulações podem ser distribuídas entre múltiplos núcleos da CPU.
+* Renderização e cálculos podem ocorrer de forma paralela.
+
+O objetivo é manter alta precisão sem comprometer a taxa de atualização da aplicação.
+
+---
+
+## Dependências
+
+O projeto busca minimizar dependências externas.
+
+Além das APIs gráficas e componentes nativos de cada sistema operacional, a engine evita bibliotecas de terceiros sempre que possível.
+
+---
+
+## Web
+
+A Riemann Engine também pode ser compilada para:
+
+* WebAssembly (WASM)
+* WebGPU
+
+Permitindo execução diretamente em navegadores modernos.
+
+---
+
+# Compilação
+
+## CMake (Recomendado)
+
+### Configurar
 
 ```bash
-# 1. Configurar (Auto-Detect)
 cmake -S . -B build
+```
 
-# 2. Compilar
+### Compilar
+
+```bash
 cmake --build build --parallel $(nproc)
 ```
 
-### Overrides Manuais
+---
 
-exemplo: Forçar Wayland + Vulkan:
+## Configurações Manuais
+
+### Wayland + Vulkan
+
 ```bash
-cmake -S . -B build -DPLATFORM=LINUX_WAYLAND -DGPU_API=vulkan
+cmake -S . -B build \
+    -DPLATFORM=LINUX_WAYLAND \
+    -DGPU_API=vulkan
 ```
 
-Exemplo: Forçar Windows + DX11:
+### Windows + Direct3D
+
 ```bash
-cmake -S . -B build -DPLATFORM=WINDOWS -DGPU_API=dx11
+cmake -S . -B build \
+    -DPLATFORM=WINDOWS \
+    -DGPU_API=dx11
 ```
 
+O sistema detecta automaticamente a plataforma e o backend gráfico recomendado para cada ambiente.
 
-CMake detecta automaticamente a plataforma e a API grafica recomendada, se você quiser usar outra API, rode o cmake (ou wrapper make) com a flag especifica (Tipo, quando optar usar opengl ao invés do padrão vulkan. )
+As opções podem ser sobrescritas manualmente através das flags de configuração.
 
+---
 
-### Plataformas e APIs graficas:
+# Plataformas e APIs Disponíveis
 
+| Plataforma    | Backend padrão | Alternativas        |
+| ------------- | -------------- | ------------------- |
+| linux-x11     | Vulkan         | OpenGL              |
+| linux-wayland | Vulkan         | OpenGL              |
+| fbsd-x11      | Vulkan         | OpenGL              |
+| fbsd-wayland  | Vulkan         | OpenGL              |
+| windows       | Direct3D       | Vulkan, OpenGL      |
+| mac           | Metal          | —                   |
+| mac_x86       | Metal          | OpenGL (deprecated) |
+| navigator     | WebGPU         | —                   |
 
-  linux-x11       **(Default: vulkan | Opções: opengl**)
+---
 
-  linux-wayland   **(Default: vulkan | Opções: opengl**)
+# Compiladores
 
-  fbsd-x11        **(Default: vulkan | Opções: opengl**)
+Recomendados:
 
-  fbsd-wayland    **(Default: vulkan | Opções: opengl**)
+* Clang
+* LLVM Clang
+* Apple Clang
 
-  windows         **(Default: dx11   | Opções: vulkan, opengl**)
-
-  mac             **(Default: metal  | Macs com Apple Silicon: Apenas Metal **)
-
-  mac_x86         **(Default: metal  | Para Macs com Intel x86: Suporta OpenGL, porém deprecated**)
-
-  navigator       **(Default: webgpu | Nenhuma outra opção**)
-
-
-
-
-Recomendado usar clang-llvm ou apple-clang (o melhor em apple). Não foi testado em outros compiladores e pode dar problemas com flags!
-
-
+Outros compiladores não foram amplamente testados e podem apresentar diferenças de comportamento ou incompatibilidades com determinadas flags de compilação.
