@@ -53,15 +53,15 @@ static int tests_failed = 0;
 static void test_disk_isco(void) {
   printf("🌀 Testando ISCO do disco...\n");
 
-  struct bhs_kerr kerr_s = {.M = 1.0, .a = 0.0};
-  struct bhs_kerr kerr_spin = {.M = 1.0, .a = 0.9};
+  struct ri_kerr kerr_s = {.M = 1.0, .a = 0.0};
+  struct ri_kerr kerr_spin = {.M = 1.0, .a = 0.9};
 
   /* Schwarzschild: ISCO = 6M */
-  double isco_s = bhs_disk_isco(&kerr_s);
+  double isco_s = ri_disk_isco(&kerr_s);
   ASSERT_NEAR(isco_s, 6.0, 0.01, "ISCO Schwarzschild = 6M");
 
   /* Com spin, ISCO é menor (prograde) */
-  double isco_spin = bhs_disk_isco(&kerr_spin);
+  double isco_spin = ri_disk_isco(&kerr_spin);
   ASSERT_TRUE(isco_spin < isco_s, "ISCO com spin < ISCO sem spin");
   ASSERT_TRUE(isco_spin > 1.0, "ISCO > horizonte");
 
@@ -71,9 +71,9 @@ static void test_disk_isco(void) {
 static void test_disk_temperature(void) {
   printf("🔥 Testando temperatura do disco...\n");
 
-  struct bhs_kerr bh = {.M = 1.0, .a = 0.5};
-  struct bhs_disk disk = {
-      .inner_radius = bhs_disk_isco(&bh),
+  struct ri_kerr bh = {.M = 1.0, .a = 0.5};
+  struct ri_disk disk = {
+      .inner_radius = ri_disk_isco(&bh),
       .outer_radius = 15.0,
       .mdot = 0.1,
       .inclination = M_PI / 4.0,
@@ -81,18 +81,18 @@ static void test_disk_temperature(void) {
 
   /* Temperatura zero fora do disco */
   double temp_inside =
-      bhs_disk_temperature(&bh, &disk, disk.inner_radius - 0.1);
+      ri_disk_temperature(&bh, &disk, disk.inner_radius - 0.1);
   ASSERT_NEAR(temp_inside, 0.0, TEST_EPSILON, "Temp=0 dentro do ISCO");
 
   double temp_outside =
-      bhs_disk_temperature(&bh, &disk, disk.outer_radius + 1.0);
+      ri_disk_temperature(&bh, &disk, disk.outer_radius + 1.0);
   ASSERT_NEAR(temp_outside, 0.0, TEST_EPSILON, "Temp=0 fora do disco");
 
   /* Temperatura: pico em r_peak = 1.5 * ISCO, depois decresce */
   double r_peak = disk.inner_radius * 1.5;
-  double temp_peak = bhs_disk_temperature(&bh, &disk, r_peak);
-  double temp_mid = bhs_disk_temperature(&bh, &disk, 8.0);
-  double temp_outer = bhs_disk_temperature(&bh, &disk, 14.0);
+  double temp_peak = ri_disk_temperature(&bh, &disk, r_peak);
+  double temp_mid = ri_disk_temperature(&bh, &disk, 8.0);
+  double temp_outer = ri_disk_temperature(&bh, &disk, 14.0);
 
   ASSERT_TRUE(temp_peak > temp_mid, "Temp decresce: peak > mid");
   ASSERT_TRUE(temp_mid > temp_outer, "Temp decresce: mid > outer");
@@ -104,17 +104,17 @@ static void test_disk_temperature(void) {
 static void test_disk_orbital_velocity(void) {
   printf("🚀 Testando velocidades orbitais...\n");
 
-  struct bhs_kerr bh = {.M = 1.0, .a = 0.5};
+  struct ri_kerr bh = {.M = 1.0, .a = 0.5};
 
   /* Velocidade Kepleriana */
-  double omega_10 = bhs_disk_omega_kepler(&bh, 10.0);
-  double omega_20 = bhs_disk_omega_kepler(&bh, 20.0);
+  double omega_10 = ri_disk_omega_kepler(&bh, 10.0);
+  double omega_20 = ri_disk_omega_kepler(&bh, 20.0);
 
   ASSERT_TRUE(omega_10 > omega_20, "Ω_K decresce com r");
   ASSERT_TRUE(omega_10 > 0.0, "Ω_K > 0 (prograde)");
 
   /* Velocidade tangencial */
-  double v_phi = bhs_disk_velocity_phi(&bh, 10.0);
+  double v_phi = ri_disk_velocity_phi(&bh, 10.0);
   ASSERT_TRUE(v_phi > 0.0, "v_φ > 0");
 
   printf("  ✅ Velocidades OK (Ω_K(10)=%.4f, v_φ=%.4f)\n", omega_10, v_phi);
@@ -123,7 +123,7 @@ static void test_disk_orbital_velocity(void) {
 static void test_disk_redshift(void) {
   printf("🔴🔵 Testando redshift Doppler...\n");
 
-  struct bhs_kerr bh = {.M = 1.0, .a = 0.5};
+  struct ri_kerr bh = {.M = 1.0, .a = 0.5};
   double r = 10.0;
   double incl = M_PI / 4.0; /* 45 graus */
 
@@ -132,9 +132,9 @@ static void test_disk_redshift(void) {
    * phi = π/2: lado se aproximando (blueshift, z < 0)
    * phi = 3π/2: lado se afastando (redshift, z > 0)
    */
-  double z_far = bhs_disk_redshift_total(&bh, r, 0.0, incl);
-  double z_approach = bhs_disk_redshift_total(&bh, r, M_PI / 2.0, incl);
-  double z_recede = bhs_disk_redshift_total(&bh, r, 3.0 * M_PI / 2.0, incl);
+  double z_far = ri_disk_redshift_total(&bh, r, 0.0, incl);
+  double z_approach = ri_disk_redshift_total(&bh, r, M_PI / 2.0, incl);
+  double z_recede = ri_disk_redshift_total(&bh, r, 3.0 * M_PI / 2.0, incl);
 
   /* Redshift gravitacional sempre positivo */
   ASSERT_TRUE(z_far > 0.0, "z gravitacional > 0");
@@ -150,9 +150,9 @@ static void test_disk_redshift(void) {
 static void test_blackbody_colors(void) {
   printf("🌈 Testando cores de corpo negro...\n");
 
-  struct bhs_color_rgb cold = bhs_blackbody_color(0.1);
-  struct bhs_color_rgb hot = bhs_blackbody_color(0.5);
-  struct bhs_color_rgb very_hot = bhs_blackbody_color(0.9);
+  struct ri_color_rgb cold = ri_blackbody_color(0.1);
+  struct ri_color_rgb hot = ri_blackbody_color(0.5);
+  struct ri_color_rgb very_hot = ri_blackbody_color(0.9);
 
   /* Frio: mais vermelho */
   ASSERT_TRUE(cold.r > cold.b, "Frio: mais vermelho");

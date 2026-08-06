@@ -26,7 +26,7 @@ int main(void) {
   printf("=== Teste de Integração: UI ===\n\n");
 
   /* Cria contexto */
-  struct bhs_ui_config config = {
+  struct ri_ui_config config = {
       .title = "Black Hole Simulator - UI Test",
       .width = 800,
       .height = 600,
@@ -35,9 +35,9 @@ int main(void) {
       .debug = true,
   };
 
-  bhs_ui_ctx_t ctx;
-  int ret = bhs_ui_create(&config, &ctx);
-  if (ret != BHS_UI_OK) {
+  ri_ui_ctx_t ctx;
+  int ret = ri_ui_create(&config, &ctx);
+  if (ret != RI_UI_OK) {
     fprintf(stderr, "ERRO: Falha ao criar contexto UI (%d)\n", ret);
     return 1;
   }
@@ -52,33 +52,33 @@ int main(void) {
   printf("Loop iniciado. Feche a janela ou pressione ESC para sair.\n\n");
 
   /* Inicializa o App */
-  void bhs_app_init(void); /* Declarado em app.h, mas aqui vamos sem include pra
+  void ri_app_init(void); /* Declarado em app.h, mas aqui vamos sem include pra
                               simplificar ou incluir app.h */
   // Preferível incluir app.h
 
   /* ... (main loop) ... */
-  while (!bhs_ui_should_close(ctx)) {
+  while (!ri_ui_should_close(ctx)) {
     /* Início do frame */
-    ret = bhs_ui_begin_frame(ctx);
-    if (ret != BHS_UI_OK)
+    ret = ri_ui_begin_frame(ctx);
+    if (ret != RI_UI_OK)
       break;
 
     /* Verifica ESC */
-    if (bhs_ui_key_pressed(ctx, BHS_KEY_ESCAPE))
+    if (ri_ui_key_pressed(ctx, RI_KEY_ESCAPE))
       break;
 
     /* Roda a Aplicação */
-    bhs_app_update(ctx);
+    ri_app_update(ctx);
 
     /* Fim do frame */
-    ret = bhs_ui_end_frame(ctx);
-    if (ret != BHS_UI_OK)
+    ret = ri_ui_end_frame(ctx);
+    if (ret != RI_UI_OK)
       break;
   }
 
   /* Cleanup */
   printf("\nFinalizando...\n");
-  bhs_ui_destroy(ctx);
+  ri_ui_destroy(ctx);
   printf("Teste concluído! Clicks: %d, Slider: %.2f, Checkbox: %s\n",
          click_count, slider_value, checkbox_checked ? "ON" : "OFF");
 

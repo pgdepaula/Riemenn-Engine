@@ -1,8 +1,8 @@
 /**
  * @file engine.h
- * @brief Black Hole Gravity Engine - Public API
+ * @brief Riemenn Engine - Public API
  *
- * This is the ONLY header that the Application (src/) should include.
+ * This is the ONLY header that the Application (game/) should include.
  * It strictly hides the implementation details (ECS, Physics, Algorithms).
  *
  * Principios:
@@ -11,11 +11,11 @@
  * - Data-Oriented input (Scene loading)
  */
 
-#ifndef BHS_ENGINE_H
-#define BHS_ENGINE_H
+#ifndef RI_ENGINE_H
+#define RI_ENGINE_H
 
 #include <stdbool.h>
-#include "math/core.h"
+#include "engine/math/core.h"
 
 /* ============================================================================
  * ENGINE LIFECYCLE
@@ -23,19 +23,19 @@
  */
 
 /**
- * bhs_engine_init - Inicializa subsistemas (Memory, ECS, Physics)
+ * ri_engine_init - Inicializa subsistemas (Memory, ECS, Physics)
  * 
  * Deve ser chamado antes de qualquer outra funcao da engine.
  */
-void bhs_engine_init(void);
+void ri_engine_init(void);
 
 /**
- * bhs_engine_shutdown - Libera todos os recursos
+ * ri_engine_shutdown - Libera todos os recursos
  */
-void bhs_engine_shutdown(void);
+void ri_engine_shutdown(void);
 
 /**
- * bhs_engine_update - Avanca a simulacao
+ * ri_engine_update - Avanca a simulacao
  * @dt: Delta time em segundos (step fixo recomendado para fisica)
  *
  * Executa:
@@ -43,7 +43,7 @@ void bhs_engine_shutdown(void);
  * 2. Spacetime System (Metric Updates)
  * 3. Script/Game Logic Systems
  */
-void bhs_engine_update(double dt);
+void ri_engine_update(double dt);
 
 /* ============================================================================
  * SCENE MANAGEMENT
@@ -51,13 +51,13 @@ void bhs_engine_update(double dt);
  */
 
 /**
- * bhs_scene_load - Carrega uma cena (planetas, config)
+ * ri_scene_load - Carrega uma cena (planetas, config)
  * @path: Caminho para o arquivo ou string de definicao
  *
  * Por enquanto, hardcoded ou script simples.
  * Futuro: JSON/Binary serialization.
  */
-void bhs_scene_load(const char *path);
+void ri_scene_load(const char *path);
 
 /* ============================================================================
  * ECS EXPOSURE (Optional/Advanced)
@@ -68,6 +68,6 @@ void bhs_scene_load(const char *path);
 
 // TODO: Decidir se expomos ECS diretamente aqui ou se mantemos encapsulado. 
 // Provavelmente vamos manter encapsulado pra ninguém fazer besteira.
-// Por enquanto, encapsulado. Use bhs_scene_load.
+// Por enquanto, encapsulado. Use ri_scene_load.
 
-#endif /* BHS_ENGINE_H */
+#endif /* RI_ENGINE_H */

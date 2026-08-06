@@ -17,39 +17,39 @@ int main(void) {
   clock_t start = clock();
 
   for (int i = 0; i < NUM_ITERATIONS; i++) {
-    bhs_scene_t scene = bhs_scene_create();
+    ri_scene_t scene = ri_scene_create();
     if (!scene) {
       fprintf(stderr, "[FALHA] Nao foi possivel criar cena na iteracao %d\n",
               i);
       return 1;
     }
 
-    bhs_scene_init_default(scene);
+    ri_scene_init_default(scene);
 
     /* 
      * Como a engine entrega uma cena vazia, precisamos adicionar algo 
      * para o teste não reclamar de "Cena vazia". 
      */
-    struct bhs_vec3 zero = {0, 0, 0};
-    bhs_scene_add_body(scene, BHS_BODY_PLANET, zero, zero, 1.0, 1.0, zero);
+    struct ri_vec3 zero = {0, 0, 0};
+    ri_scene_add_body(scene, RI_BODY_PLANET, zero, zero, 1.0, 1.0, zero);
 
     /* Simula alguns frames */
     for (int j = 0; j < 10; j++) {
-      bhs_scene_update(scene, 0.016);
+      ri_scene_update(scene, 0.016);
     }
 
     /* Check simples para ver se tem coisas lá dentro */
     int count = 0;
-    const struct bhs_body *bodies = bhs_scene_get_bodies(scene, &count);
+    const struct ri_body *bodies = ri_scene_get_bodies(scene, &count);
     if (count == 0 || !bodies) {
       fprintf(stderr, "[FALHA] Cena vazia na iteracao %d\n", i);
-      bhs_scene_destroy(scene);
+      ri_scene_destroy(scene);
       return 1;
     }
 
     /* Spacetime check removed (Legacy) */
 
-    bhs_scene_destroy(scene);
+    ri_scene_destroy(scene);
 
     if (i % 100 == 0) {
       printf("Iteracao %d ok...\r", i);

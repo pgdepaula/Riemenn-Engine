@@ -7,9 +7,9 @@
 #include <stdlib.h>
 #include "image_loader.h"
 
-bhs_image_t bhs_image_gen_sphere(int size)
+ri_image_t ri_image_gen_sphere(int size)
 {
-	bhs_image_t img = { 0 };
+	ri_image_t img = { 0 };
 	img.width = size;
 	img.height = size;
 	img.channels = 4;

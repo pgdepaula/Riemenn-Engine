@@ -12,13 +12,13 @@
 #define PI 3.14159265359f
 #endif
 
-bhs_mesh_t bhs_mesh_gen_sphere(int rings, int sectors)
+ri_mesh_t ri_mesh_gen_sphere(int rings, int sectors)
 {
-	bhs_mesh_t mesh = { 0 };
+	ri_mesh_t mesh = { 0 };
 
 	/* Computação de Vértices */
 	mesh.vertex_count = (rings + 1) * (sectors + 1);
-	mesh.vertices = malloc(mesh.vertex_count * sizeof(bhs_vertex_3d_t));
+	mesh.vertices = malloc(mesh.vertex_count * sizeof(ri_vertex_3d_t));
 
 	if (!mesh.vertices)
 		return mesh;
@@ -126,7 +126,7 @@ bhs_mesh_t bhs_mesh_gen_sphere(int rings, int sectors)
 	return mesh;
 }
 
-void bhs_mesh_free(bhs_mesh_t mesh)
+void ri_mesh_free(ri_mesh_t mesh)
 {
 	if (mesh.vertices)
 		free(mesh.vertices);

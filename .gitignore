@@ -1,77 +1,85 @@
-# Prerequisites
-*.d
+# ==============================================================================
+# Riemenn Engine — .gitignore
+# ==============================================================================
 
-# Object files
+# --- Build artifacts ----------------------------------------------------------
+build/
+cmake-build-*/
+build_*/
+bin/
+target/
+
+# --- Compiled objects ---------------------------------------------------------
 *.o
-*.ko
 *.obj
 *.elf
+*.ko
+*.d
 
-# Linker output
+# --- Libraries ----------------------------------------------------------------
+*.a
+*.lib
+*.la
+*.lo
+*.so
+*.so.*
+*.dll
+*.dylib
+
+# --- Executables --------------------------------------------------------------
+*.exe
+*.app
+*.out
+blackhole_sim
+
+# --- Linker -------------------------------------------------------------------
 *.ilk
 *.map
 *.exp
-*.out
 
-# Precompiled Headers
+# --- Precompiled headers ------------------------------------------------------
 *.gch
 *.pch
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
+# --- Debug symbols ------------------------------------------------------------
+*.dSYM/
+*.pdb
+*.idb
+*.su
+*.dwo
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+# --- Shader compilation -------------------------------------------------------
+# Keep checked-in .spv files, ignore generated ones in build/
+# *.spv
 
-# Executables
-*.exe
-*.app
-*.i*86
-*.x86_64
-*.hex
-blackhole_sim
+# --- Application data ---------------------------------------------------------
+*.bhs
 quicksave.bhs
 *.ppm
 *.log
 
-# Build Directories
-build/
-bin/
-target/
-build_verify/
-data/
-build_test/
-# IDEs and Tools
+# --- IDEs & editors -----------------------------------------------------------
 .vscode/
 .idea/
 .vs/
-*.swpe
+*.swp
 *.swo
 *~
 compile_commands.json
 .cache/
+.clangd/
+
+# --- Gemini AI ----------------------------------------------------------------
 .gemini/
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# --- OS junk ------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# Kernel Module Compile Results
+# --- Kernel module (legacy, keep for safety) ----------------------------------
 *.mod*
 *.cmd
 .tmp_versions/
 modules.order
 Module.symvers
-Mkfile.old
-dkms.conf
-
-# debug information files
-*.dwo

@@ -12,14 +12,14 @@ int main(void)
 	printf("Running SVG Repro Test...\n");
 	
 	/* Load the camera icon which has a hole in the middle */
-	bhs_svg_t *svg = bhs_svg_load("src/assets/icons/camera.svg");
+	ri_svg_t *svg = ri_svg_load("game/assets/icons/camera.svg");
 	if (!svg) {
 		fprintf(stderr, "FAIL: Could not load svg\n");
 		return 1;
 	}
 	
 	/* Rasterize at 1.0 scale */
-	bhs_image_t img = bhs_svg_rasterize(svg, 1.0f);
+	ri_image_t img = ri_svg_rasterize(svg, 1.0f);
 	
 	/* Check pixel at (32, 20) - this is inside the hole (Radius 18) but outside the inner circle (Radius 10)
 	   Center is (32, 34). dist(32, 20) = 14. 10 < 14 < 18.
@@ -49,8 +49,8 @@ int main(void)
         passed_camera = 0;
     }
 	
-	bhs_image_free(img);
-	bhs_svg_free(svg);
+	ri_image_free(img);
+	ri_svg_free(svg);
 	
 	/* TEST 2: Parser Command Consumption Bug */
 	/* "M10 10h10" should mean Move(10,10), LineRelX(10) -> (20,10).
@@ -58,13 +58,13 @@ int main(void)
 	   It becomes Move(10,10), Implicit LineAbs(10, 0) -> (10,0). */
 	printf("\nRunning Parser Consumption Test...\n");
 	const char *svg_str = "<svg width='40' height='40'><path d='M10 10h10' stroke='white' stroke-width='2' fill='none'/></svg>";
-	bhs_svg_t *svg2 = bhs_svg_parse(svg_str);
+	ri_svg_t *svg2 = ri_svg_parse(svg_str);
     int passed_parser = 0;
 	if (!svg2) {
 		printf("Parser Test: FAIL (Parse error)\n");
 	} else {
         /* Rasterize */
-        bhs_image_t img2 = bhs_svg_rasterize(svg2, 1.0f);
+        ri_image_t img2 = ri_svg_rasterize(svg2, 1.0f);
         
         /* Check pixel at (15, 10). Should be white if line exists from 10,10 to 20,10. */
         /* Note: stroke is white. */
@@ -75,12 +75,12 @@ int main(void)
            So let's use a filled rect using path: M10 10 h 10 v 10 h -10 z. 
            If h is eaten, it fails. */
            
-        bhs_svg_free(svg2);
+        ri_svg_free(svg2);
         
         /* Use filled shape for test to be safe with current rasterizer limits */
         const char *svg_str_fill = "<svg width='40' height='40'><path d='M10 10h10v10h-10z' fill='white'/></svg>";
-        svg2 = bhs_svg_parse(svg_str_fill);
-        img2 = bhs_svg_rasterize(svg2, 1.0f);
+        svg2 = ri_svg_parse(svg_str_fill);
+        img2 = ri_svg_rasterize(svg2, 1.0f);
         
         int tx = 15, ty = 15; /* Center of 10,10 20,20 rect */
         uint8_t *p2 = &img2.data[(ty * img2.width + tx) * 4];
@@ -93,8 +93,8 @@ int main(void)
              printf("Parser Test: FAIL (Rect missing or malformed)\n");
              passed_parser = 0;
         }
-        bhs_image_free(img2);
-        bhs_svg_free(svg2);
+        ri_image_free(img2);
+        ri_svg_free(svg2);
     }
 
 	return (passed_camera && passed_parser) ? 0 : 1;

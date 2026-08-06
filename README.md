@@ -1,199 +1,141 @@
-# Riemann Engine
+# Riemenn Engine
 
-Motor gráfico multiplataforma e simulador espacial de alta precisão, desenvolvido em C.
+Motor gráfico e framework de simulação científica de alta performance, desenvolvido em **C11**.
 
-O projeto combina uma engine própria de renderização com uma aplicação de simulação astronômica baseada em modelos físicos e matemáticos utilizados na mecânica orbital moderna.
+Projetado com arquitetura modular limpa — separação clara entre **engine** (genérica, reutilizável) e **aplicação** (simulação astrofísica). O primeiro aplicativo construído sobre a engine é um simulador orbital do Sistema Solar com precisão científica.
 
 ---
 
-## Visão Geral
+## Arquitetura
 
-O objetivo da Riemann Engine é representar o Sistema Solar com fidelidade científica, calculando posições, distâncias e fenômenos orbitais em tempo real a partir de dados astronômicos reais.
+```
+engine/
+├── foundation/     Logging, assertions — zero dependências
+├── math/           Vetores 4D, matrizes 4x4, tensores, métricas de Kerr/Schwarzschild
+├── platform/       Abstração de SO (Wayland, Win32)
+├── rhi/            Render Hardware Interface (Vulkan, D3D12)
+├── ecs/            Entity Component System + sistema de eventos
+├── physics/        Integradores numéricos (RK4, Leapfrog, Yoshida), geodésicas
+├── assets/         Loaders de imagem (PNG) e SVG
+├── geometry/       Geração procedural de meshes
+├── render/         Camera 3D, controller, shader utilities
+├── scene/          Scene graph genérico
+├── ui/             Framework de UI imediato (widgets, layout, temas, render 2D)
+└── engine.h        API pública unificada
 
-Diferentemente de simuladores baseados em tabelas estáticas ou eventos pré-programados, o sistema prioriza cálculos físicos e matemáticos para obter resultados diretamente da simulação.
+game/
+├── simulation/     Cenários, presets (Solar System J2000, Kerr), fábricas de entidades
+├── render/         Passes de renderização (black hole lensing, planetas, espaço-tempo)
+├── screens/        HUD, tela inicial, viewport
+├── input/          Mapeamento de entrada do jogador
+├── config/         Configurações persistentes
+└── debug/          Telemetria de física
+```
 
-### Principais características
+### Diagrama de Dependências
 
-* Simulação do Sistema Solar baseada no padrão astronômico J2000.
-* Cálculo de posições planetárias para datas passadas, atuais e futuras.
-* Escala física real ou escala adaptada para visualização didática.
-* Dados orbitais calculados em tempo real.
-* Estatísticas derivadas da própria simulação.
-* Renderização acelerada por GPU.
-* Execução nativa em desktop e navegadores modernos.
+```
+Camada 0   foundation          (log, assert)
+Camada 1   math                (vec4, mat4, tensor, spacetime)
+Camada 2   platform + rhi      (Wayland/Win32 + Vulkan/D3D12)
+Camada 3   ecs, physics, assets, geometry, render, scene
+Camada 4   ui                  (widgets, layout, render 2D)
+Camada 5   game/               (aplicação — simulação astrofísica)
+```
+
+Cada camada depende **apenas** das camadas abaixo. Zero dependências circulares.
 
 ---
 
 ## Precisão Científica
 
-A engine não depende de conhecimento pré-programado sobre eventos astronômicos específicos.
+A simulação não utiliza dados pré-programados. Resultados como período orbital, periélio e afélio são **derivados dos cálculos físicos** em tempo real.
 
-Por exemplo:
+Fundamentos:
 
-* Não existe uma regra interna dizendo que um ano terrestre possui aproximadamente 365 dias.
-* Não existe uma regra dizendo quando a Terra estará mais próxima ou mais distante do Sol.
-
-Essas informações são obtidas a partir dos cálculos orbitais executados durante a simulação.
-
-Isso permite que diversos dados sejam derivados diretamente dos modelos matemáticos utilizados pelo sistema, produzindo resultados compatíveis com observações astronômicas reais.
-
-Os fundamentos incluem conceitos presentes em áreas como:
-
-* Mecânica orbital
-* Gravitação clássica
-* Relatividade
-* Dinâmica de sistemas
-
-O objetivo é transformar modelos normalmente vistos em artigos científicos, livros e quadros de aula em uma representação visual e interativa.
+- Mecânica orbital e gravitação N-body
+- Relatividade geral (métricas de Schwarzschild e Kerr)
+- Integradores simpléticos (Leapfrog, Yoshida 4ª ordem)
+- Correções pós-Newtonianas (1PN)
+- Constantes astronômicas IAU 2015
 
 ---
 
-# Arquitetura
+## Plataformas e APIs Gráficas (Troca em Runtime)
 
-A engine foi construída com foco em portabilidade, desempenho e baixo nível de abstração.
+Todos os backends suportados pela plataforma são compilados juntos no binário. O usuário pode alternar a API gráfica nas configurações do jogo em runtime.
 
-## Linguagem
-
-* C (ISO C)
-
-## Camadas principais
-
-### HAL (Hardware Abstraction Layer)
-
-Responsável por abstrair recursos específicos do hardware.
-
-### PAL (Platform Abstraction Layer)
-
-Responsável por abstrair sistemas operacionais, janelas, entrada e integração com plataformas.
+| Plataforma      | Windowing | GPU Backends Suportados (Troca em Runtime) |
+|-----------------|-----------|-------------------------------------------|
+| Linux           | Wayland   | Vulkan (primário), OpenGL (fallback)      |
+| Windows         | Win32     | Direct3D 12 (primário), Vulkan, Direct3D 11, OpenGL |
 
 ---
 
-## APIs Gráficas
+## Scripting
 
-A engine suporta múltiplos backends de renderização:
-
-| API      | Status          |
-| -------- | --------------- |
-| Vulkan   | Principal       |
-| Metal    | Principal       |
-| OpenGL   | Compatibilidade |
-| Direct3D | Compatibilidade |
-
-Essas APIs são utilizadas diretamente através da camada de abstração da engine.
+Game scripting via **LuaJIT** para extensibilidade de cenários e lógica de jogo.
 
 ---
 
-## Plataformas Suportadas
+## Compilação
 
-| Plataforma            | Backend padrão |
-| --------------------- | -------------- |
-| Linux (Wayland)       | Vulkan         |
-| Linux (X11)           | Vulkan         |
-| FreeBSD (Wayland)     | Vulkan         |
-| FreeBSD (X11)         | Vulkan         |
-| Windows               | Direct3D       |
-| macOS (Apple Silicon) | Metal          |
-| macOS (Intel)         | Metal          |
-| WebAssembly/WebGPU    | WebGPU         |
+### Requisitos
 
----
+- **Compilador**: Clang (recomendado) — C11
+- **Build system**: CMake 3.20+
+- **Vulkan SDK** (Linux)
+- **Wayland dev libs** (Linux): `wayland-client`, `wayland-protocols`
+- **FreeType2** + **Fontconfig** (Linux, para UI)
 
-## Paralelismo e Desempenho
-
-A arquitetura foi projetada para aproveitar ao máximo os recursos disponíveis da máquina.
-
-Dependendo da plataforma e configuração:
-
-* Processamento físico pode ser executado na GPU.
-* Simulações podem ser distribuídas entre múltiplos núcleos da CPU.
-* Renderização e cálculos podem ocorrer de forma paralela.
-
-O objetivo é manter alta precisão sem comprometer a taxa de atualização da aplicação.
-
----
-
-## Dependências
-
-O projeto busca minimizar dependências externas.
-
-Além das APIs gráficas e componentes nativos de cada sistema operacional, a engine evita bibliotecas de terceiros sempre que possível.
-
----
-
-## Web
-
-A Riemann Engine também pode ser compilada para:
-
-* WebAssembly (WASM)
-* WebGPU
-
-Permitindo execução diretamente em navegadores modernos.
-
----
-
-# Compilação
-
-## CMake (Recomendado)
-
-### Configurar
+### Build rápido
 
 ```bash
-cmake -S . -B build
+# Linux (Wayland + Vulkan)
+make linux
+
+# Windows (Win32 + D3D12)
+make windows
+
+# Release otimizado
+make release
 ```
 
-### Compilar
+### CMake direto
 
 ```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --parallel $(nproc)
 ```
 
----
-
-## Configurações Manuais
-
-### Wayland + Vulkan
+### Testes
 
 ```bash
-cmake -S . -B build \
-    -DPLATFORM=LINUX_WAYLAND \
-    -DGPU_API=vulkan
+make test
 ```
-
-### Windows + Direct3D
-
-```bash
-cmake -S . -B build \
-    -DPLATFORM=WINDOWS \
-    -DGPU_API=dx11
-```
-
-O sistema detecta automaticamente a plataforma e o backend gráfico recomendado para cada ambiente.
-
-As opções podem ser sobrescritas manualmente através das flags de configuração.
 
 ---
 
-# Plataformas e APIs Disponíveis
+## Estrutura de Módulos (CMake)
 
-| Plataforma    | Backend padrão | Alternativas        |
-| ------------- | -------------- | ------------------- |
-| linux-x11     | Vulkan         | OpenGL              |
-| linux-wayland | Vulkan         | OpenGL              |
-| fbsd-x11      | Vulkan         | OpenGL              |
-| fbsd-wayland  | Vulkan         | OpenGL              |
-| windows       | Direct3D       | Vulkan, OpenGL      |
-| mac           | Metal          | —                   |
-| mac_x86       | Metal          | OpenGL (deprecated) |
-| navigator     | WebGPU         | —                   |
+| Target              | Alias             | Tipo    | Dependências                    |
+|---------------------|-------------------|---------|---------------------------------|
+| `ri_foundation`     | Riemenn::Foundation | STATIC | pthread                         |
+| `ri_math`           | Riemenn::Math     | STATIC  | ri_foundation, m                |
+| `ri_platform`       | Riemenn::Platform | STATIC  | ri_foundation, wayland/win32    |
+| `ri_rhi`            | Riemenn::RHI      | STATIC  | ri_foundation, ri_platform, Vulkan |
+| `ri_ecs`            | Riemenn::ECS      | STATIC  | ri_foundation, ri_math          |
+| `ri_physics`        | Riemenn::Physics  | STATIC  | ri_foundation, ri_math          |
+| `ri_assets`         | Riemenn::Assets   | STATIC  | ri_foundation                   |
+| `ri_geometry`       | Riemenn::Geometry | STATIC  | ri_math                         |
+| `ri_render`         | Riemenn::Render   | STATIC  | ri_rhi, ri_math                 |
+| `ri_scene`          | Riemenn::Scene    | STATIC  | ri_ecs                          |
+| `ri_ui`             | Riemenn::UI       | STATIC  | ri_rhi, ri_platform, Fontconfig, FreeType2 |
+| `ri_engine`         | Riemenn::Engine   | INTERFACE | todos os módulos acima        |
+| `blackhole_sim`     | —                 | EXE     | ri_engine                       |
 
 ---
 
-# Compiladores
+## Licença
 
-Recomendados:
-
-* Clang
-* LLVM Clang
-* Apple Clang
-
-Outros compiladores não foram amplamente testados e podem apresentar diferenças de comportamento ou incompatibilidades com determinadas flags de compilação.
+MIT — veja [LICENSE](LICENSE).

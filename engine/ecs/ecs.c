@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "gui/log.h"
+#include "engine/foundation/log.h"
 
 #define MAX_COMPONENT_TYPES 32
 
@@ -16,29 +16,29 @@
  * Por simplicidade nesta fase, usamos array denso indexado por EntityID.
  * Otimização futura: Sparse Set para compactação.
  */
-struct bhs_component_pool {
+struct ri_component_pool {
 	size_t element_size;
 	void *data;   // data[entity_id * element_size]
 	bool *active; // active[entity_id]
 };
 
-struct bhs_world_t {
+struct ri_world_t {
 	uint32_t next_entity_id;
-	struct bhs_component_pool components[MAX_COMPONENT_TYPES];
+	struct ri_component_pool components[MAX_COMPONENT_TYPES];
 	// Recycled IDs queue could go here
 };
 
-bhs_world_handle bhs_ecs_create_world(void)
+ri_world_handle ri_ecs_create_world(void)
 {
-	bhs_world_handle w = calloc(1, sizeof(struct bhs_world_t));
+	ri_world_handle w = calloc(1, sizeof(struct ri_world_t));
 	if (w) {
 		w->next_entity_id = 1; // 0 is Invalid
-		BHS_LOG_ECS_DEBUG("World created at %p", (void *)w);
+		RI_LOG_ECS_DEBUG("World created at %p", (void *)w);
 	}
 	return w;
 }
 
-void bhs_ecs_destroy_world(bhs_world_handle world)
+void ri_ecs_destroy_world(ri_world_handle world)
 {
 	if (!world)
 		return;
@@ -49,21 +49,21 @@ void bhs_ecs_destroy_world(bhs_world_handle world)
 			free(world->components[i].active);
 	}
 	free(world);
-	BHS_LOG_ECS_DEBUG("World destroyed");
+	RI_LOG_ECS_DEBUG("World destroyed");
 }
 
-bhs_entity_id bhs_ecs_create_entity(bhs_world_handle world)
+ri_entity_id ri_ecs_create_entity(ri_world_handle world)
 {
-	if (world->next_entity_id >= BHS_MAX_ENTITIES) {
-		BHS_LOG_ERROR_CH(BHS_LOG_CHANNEL_ECS,
+	if (world->next_entity_id >= RI_MAX_ENTITIES) {
+		RI_LOG_ERROR_CH(RI_LOG_CHANNEL_ECS,
 				 "Max entities reached! (%d)",
-				 BHS_MAX_ENTITIES);
-		return BHS_ENTITY_INVALID;
+				 RI_MAX_ENTITIES);
+		return RI_ENTITY_INVALID;
 	}
 	return world->next_entity_id++;
 }
 
-void bhs_ecs_destroy_entity(bhs_world_handle world, bhs_entity_id entity)
+void ri_ecs_destroy_entity(ri_world_handle world, ri_entity_id entity)
 {
 	// Mark as inactive in all pools
 	for (int i = 0; i < MAX_COMPONENT_TYPES; i++) {
@@ -78,7 +78,7 @@ void bhs_ecs_destroy_entity(bhs_world_handle world, bhs_entity_id entity)
  * ============================================================================
  */
 
-static void ensure_pool(bhs_world_handle world, bhs_component_type type,
+static void ensure_pool(ri_world_handle world, ri_component_type type,
 			size_t size)
 {
 	if (type >= MAX_COMPONENT_TYPES)
@@ -93,8 +93,8 @@ static void ensure_pool(bhs_world_handle world, bhs_component_type type,
 		 * Current: malloc(MAX * size)
 		 * Future: Page-based Generic Pool if MAX gets too big.
 		 */
-		size_t total_bytes = BHS_MAX_ENTITIES * size;
-		BHS_LOG_DEBUG_CH(BHS_LOG_CHANNEL_ECS,
+		size_t total_bytes = RI_MAX_ENTITIES * size;
+		RI_LOG_DEBUG_CH(RI_LOG_CHANNEL_ECS,
 				 "Pool Allocated: Type=%d, ElementSize=%zu, "
 				 "Total=%zu bytes",
 				 type, size, total_bytes);
@@ -102,24 +102,24 @@ static void ensure_pool(bhs_world_handle world, bhs_component_type type,
 		world->components[type].element_size = size;
 		world->components[type].data = calloc(1, total_bytes);
 		world->components[type].active =
-			calloc(BHS_MAX_ENTITIES, sizeof(bool));
+			calloc(RI_MAX_ENTITIES, sizeof(bool));
 	}
 }
 
-void *bhs_ecs_add_component(bhs_world_handle world, bhs_entity_id entity,
-			    bhs_component_type type, size_t size,
+void *ri_ecs_add_component(ri_world_handle world, ri_entity_id entity,
+			    ri_component_type type, size_t size,
 			    const void *data)
 {
-	if (entity == BHS_ENTITY_INVALID || entity >= BHS_MAX_ENTITIES)
+	if (entity == RI_ENTITY_INVALID || entity >= RI_MAX_ENTITIES)
 		return NULL;
 
 	ensure_pool(world, type, size);
 
-	struct bhs_component_pool *pool = &world->components[type];
+	struct ri_component_pool *pool = &world->components[type];
 
 	// Check consistency (optional DEBUG)
 	if (pool->element_size != size) {
-		BHS_LOG_FATAL_CH(BHS_LOG_CHANNEL_ECS,
+		RI_LOG_FATAL_CH(RI_LOG_CHANNEL_ECS,
 				 "Component size mismatch Type %d! Expected "
 				 "%zu, Got %zu",
 				 type, pool->element_size, size);
@@ -139,8 +139,8 @@ void *bhs_ecs_add_component(bhs_world_handle world, bhs_entity_id entity,
 	return dest;
 }
 
-void bhs_ecs_remove_component(bhs_world_handle world, bhs_entity_id entity,
-			      bhs_component_type type)
+void ri_ecs_remove_component(ri_world_handle world, ri_entity_id entity,
+			      ri_component_type type)
 {
 	if (type >= MAX_COMPONENT_TYPES)
 		return;
@@ -149,12 +149,12 @@ void bhs_ecs_remove_component(bhs_world_handle world, bhs_entity_id entity,
 	}
 }
 
-void *bhs_ecs_get_component(bhs_world_handle world, bhs_entity_id entity,
-			    bhs_component_type type)
+void *ri_ecs_get_component(ri_world_handle world, ri_entity_id entity,
+			    ri_component_type type)
 {
 	if (type >= MAX_COMPONENT_TYPES)
 		return NULL;
-	struct bhs_component_pool *pool = &world->components[type];
+	struct ri_component_pool *pool = &world->components[type];
 
 	if (!pool->data || !pool->active[entity])
 		return NULL;
@@ -171,12 +171,12 @@ void *bhs_ecs_get_component(bhs_world_handle world, bhs_entity_id entity,
  * Verifica se entidade possui todos os componentes da máscara.
  * Função interna usada pelas queries.
  */
-static bool entity_matches_mask(bhs_world_handle world, bhs_entity_id entity,
-				bhs_component_mask mask)
+static bool entity_matches_mask(ri_world_handle world, ri_entity_id entity,
+				ri_component_mask mask)
 {
 	for (uint32_t type = 0; type < MAX_COMPONENT_TYPES; type++) {
 		if (mask & (1u << type)) {
-			struct bhs_component_pool *pool =
+			struct ri_component_pool *pool =
 				&world->components[type];
 			if (!pool->active || !pool->active[entity])
 				return false;
@@ -185,17 +185,17 @@ static bool entity_matches_mask(bhs_world_handle world, bhs_entity_id entity,
 	return true;
 }
 
-bool bhs_ecs_entity_has_components(bhs_world_handle world, bhs_entity_id entity,
-				   bhs_component_mask mask)
+bool ri_ecs_entity_has_components(ri_world_handle world, ri_entity_id entity,
+				   ri_component_mask mask)
 {
-	if (!world || entity == BHS_ENTITY_INVALID ||
-	    entity >= BHS_MAX_ENTITIES)
+	if (!world || entity == RI_ENTITY_INVALID ||
+	    entity >= RI_MAX_ENTITIES)
 		return false;
 	return entity_matches_mask(world, entity, mask);
 }
 
-void bhs_ecs_query_init(bhs_ecs_query *q, bhs_world_handle world,
-			bhs_component_mask required)
+void ri_ecs_query_init(ri_ecs_query *q, ri_world_handle world,
+			ri_component_mask required)
 {
 	if (!q)
 		return;
@@ -208,8 +208,8 @@ void bhs_ecs_query_init(bhs_ecs_query *q, bhs_world_handle world,
 	q->use_cache = false;
 }
 
-void bhs_ecs_query_init_cached(bhs_ecs_query *q, bhs_world_handle world,
-			       bhs_component_mask required)
+void ri_ecs_query_init_cached(ri_ecs_query *q, ri_world_handle world,
+			       ri_component_mask required)
 {
 	if (!q || !world)
 		return;
@@ -221,7 +221,7 @@ void bhs_ecs_query_init_cached(bhs_ecs_query *q, bhs_world_handle world,
 
 	/* Primeira passada: contar entidades matching */
 	q->count = 0;
-	for (bhs_entity_id id = 1; id < world->next_entity_id; id++) {
+	for (ri_entity_id id = 1; id < world->next_entity_id; id++) {
 		if (entity_matches_mask(world, id, required))
 			q->count++;
 	}
@@ -232,9 +232,9 @@ void bhs_ecs_query_init_cached(bhs_ecs_query *q, bhs_world_handle world,
 	}
 
 	/* Aloca e preenche cache */
-	q->cache = malloc(q->count * sizeof(bhs_entity_id));
+	q->cache = malloc(q->count * sizeof(ri_entity_id));
 	if (!q->cache) {
-		BHS_LOG_ERROR_CH(BHS_LOG_CHANNEL_ECS,
+		RI_LOG_ERROR_CH(RI_LOG_CHANNEL_ECS,
 				 "Failed to allocate query cache size %d",
 				 q->count);
 		q->count = 0;
@@ -242,14 +242,14 @@ void bhs_ecs_query_init_cached(bhs_ecs_query *q, bhs_world_handle world,
 	}
 
 	uint32_t idx = 0;
-	for (bhs_entity_id id = 1; id < world->next_entity_id; id++) {
+	for (ri_entity_id id = 1; id < world->next_entity_id; id++) {
 		if (entity_matches_mask(world, id, required)) {
 			q->cache[idx++] = id;
 		}
 	}
 }
 
-bool bhs_ecs_query_next(bhs_ecs_query *q, bhs_entity_id *out_entity)
+bool ri_ecs_query_next(ri_ecs_query *q, ri_entity_id *out_entity)
 {
 	if (!q || !q->world || !out_entity)
 		return false;
@@ -264,8 +264,8 @@ bool bhs_ecs_query_next(bhs_ecs_query *q, bhs_entity_id *out_entity)
 
 	/* Modo on-the-fly: itera e filtra */
 	while (q->current_idx < q->world->next_entity_id) {
-		bhs_entity_id id = q->current_idx++;
-		if (id == BHS_ENTITY_INVALID)
+		ri_entity_id id = q->current_idx++;
+		if (id == RI_ENTITY_INVALID)
 			continue;
 		if (entity_matches_mask(q->world, id, q->required)) {
 			*out_entity = id;
@@ -276,13 +276,13 @@ bool bhs_ecs_query_next(bhs_ecs_query *q, bhs_entity_id *out_entity)
 	return false;
 }
 
-void bhs_ecs_query_reset(bhs_ecs_query *q)
+void ri_ecs_query_reset(ri_ecs_query *q)
 {
 	if (q)
 		q->current_idx = 0;
 }
 
-void bhs_ecs_query_destroy(bhs_ecs_query *q)
+void ri_ecs_query_destroy(ri_ecs_query *q)
 {
 	if (q && q->cache) {
 		free(q->cache);
@@ -295,35 +295,35 @@ void bhs_ecs_query_destroy(bhs_ecs_query *q)
  * ============================================================================
  */
 
-#define BHS_SAVE_MAGIC 0x42485331 /* "BHS1" */
+#define RI_SAVE_MAGIC 0x42485331 /* "BHS1" */
 
-struct bhs_save_header {
+struct ri_save_header {
 	uint32_t magic;
 	uint32_t version;
 	uint32_t num_entities;
 	uint32_t num_component_types;
 };
 
-struct bhs_save_chunk_header {
+struct ri_save_chunk_header {
 	uint32_t type_id;
 	uint32_t element_size;
 	uint32_t count;
 };
 
-bool bhs_ecs_save_world(bhs_world_handle world, const char *filename)
+bool ri_ecs_save_world(ri_world_handle world, const char *filename)
 {
 	if (!world || !filename)
 		return false;
 
 	FILE *f = fopen(filename, "wb");
 	if (!f) {
-		BHS_LOG_ERROR_CH(BHS_LOG_CHANNEL_ECS,
+		RI_LOG_ERROR_CH(RI_LOG_CHANNEL_ECS,
 				 "Failed to open file for save: %s", filename);
 		return false;
 	}
 
 	/* 1. Write Header */
-	struct bhs_save_header hdr = { .magic = BHS_SAVE_MAGIC,
+	struct ri_save_header hdr = { .magic = RI_SAVE_MAGIC,
 				       .version = 1,
 				       .num_entities = world->next_entity_id,
 				       .num_component_types =
@@ -332,7 +332,7 @@ bool bhs_ecs_save_world(bhs_world_handle world, const char *filename)
 
 	/* 2. Write Component Chunks */
 	for (uint32_t type = 0; type < MAX_COMPONENT_TYPES; type++) {
-		struct bhs_component_pool *pool = &world->components[type];
+		struct ri_component_pool *pool = &world->components[type];
 
 		/* Skip empty pools */
 		if (!pool->data || !pool->active)
@@ -349,7 +349,7 @@ bool bhs_ecs_save_world(bhs_world_handle world, const char *filename)
 			continue;
 
 		/* Write Chunk Header */
-		struct bhs_save_chunk_header chunk = {
+		struct ri_save_chunk_header chunk = {
 			.type_id = type,
 			.element_size = (uint32_t)pool->element_size,
 			.count = active_count
@@ -366,7 +366,7 @@ bool bhs_ecs_save_world(bhs_world_handle world, const char *filename)
 			}
 		}
 
-		BHS_LOG_INFO_CH(BHS_LOG_CHANNEL_ECS,
+		RI_LOG_INFO_CH(RI_LOG_CHANNEL_ECS,
 				"Saved Component Type %d: %d entities", type,
 				active_count);
 	}
@@ -375,32 +375,32 @@ bool bhs_ecs_save_world(bhs_world_handle world, const char *filename)
 	/* We rely on file size, simpler. */
 
 	fclose(f);
-	BHS_LOG_INFO_CH(BHS_LOG_CHANNEL_ECS, "World saved to %s (Entities: %d)",
+	RI_LOG_INFO_CH(RI_LOG_CHANNEL_ECS, "World saved to %s (Entities: %d)",
 			filename, hdr.num_entities);
 	return true;
 }
 
-bool bhs_ecs_load_world(bhs_world_handle world, const char *filename)
+bool ri_ecs_load_world(ri_world_handle world, const char *filename)
 {
 	if (!world || !filename)
 		return false;
 
 	FILE *f = fopen(filename, "rb");
 	if (!f) {
-		BHS_LOG_ERROR_CH(BHS_LOG_CHANNEL_ECS,
+		RI_LOG_ERROR_CH(RI_LOG_CHANNEL_ECS,
 				 "Failed to open file for load: %s", filename);
 		return false;
 	}
 
 	/* 1. Read Header */
-	struct bhs_save_header hdr;
+	struct ri_save_header hdr;
 	if (fread(&hdr, sizeof(hdr), 1, f) != 1) {
 		fclose(f);
 		return false;
 	}
 
-	if (hdr.magic != BHS_SAVE_MAGIC) {
-		BHS_LOG_ERROR_CH(BHS_LOG_CHANNEL_ECS,
+	if (hdr.magic != RI_SAVE_MAGIC) {
+		RI_LOG_ERROR_CH(RI_LOG_CHANNEL_ECS,
 				 "Invalid save file magic: %x", hdr.magic);
 		fclose(f);
 		return false;
@@ -416,15 +416,15 @@ bool bhs_ecs_load_world(bhs_world_handle world, const char *filename)
 	for (int i = 0; i < MAX_COMPONENT_TYPES; i++) {
 		if (world->components[i].active) {
 			memset(world->components[i].active, 0,
-			       BHS_MAX_ENTITIES * sizeof(bool));
+			       RI_MAX_ENTITIES * sizeof(bool));
 		}
 	}
 
 	/* 3. Read Chunks */
-	struct bhs_save_chunk_header chunk;
+	struct ri_save_chunk_header chunk;
 	while (fread(&chunk, sizeof(chunk), 1, f) == 1) {
 		if (chunk.type_id >= MAX_COMPONENT_TYPES) {
-			BHS_LOG_WARN_CH(BHS_LOG_CHANNEL_ECS,
+			RI_LOG_WARN_CH(RI_LOG_CHANNEL_ECS,
 					"Unknown component type in save: %d",
 					chunk.type_id);
 			/* Skip data */
@@ -437,12 +437,12 @@ bool bhs_ecs_load_world(bhs_world_handle world, const char *filename)
 
 		/* Ensure pool exists */
 		ensure_pool(world, chunk.type_id, chunk.element_size);
-		struct bhs_component_pool *pool =
+		struct ri_component_pool *pool =
 			&world->components[chunk.type_id];
 
 		/* Verify size compatibility */
 		if (pool->element_size != chunk.element_size) {
-			BHS_LOG_ERROR_CH(BHS_LOG_CHANNEL_ECS,
+			RI_LOG_ERROR_CH(RI_LOG_CHANNEL_ECS,
 					 "Component size mismatch! Disk=%d, "
 					 "Memory=%zu. Skipping.",
 					 chunk.element_size,
@@ -460,7 +460,7 @@ bool bhs_ecs_load_world(bhs_world_handle world, const char *filename)
 			if (fread(&entity_id, sizeof(uint32_t), 1, f) != 1)
 				break;
 
-			if (entity_id >= BHS_MAX_ENTITIES) {
+			if (entity_id >= RI_MAX_ENTITIES) {
 				/* skip data */
 				fseek(f, chunk.element_size, SEEK_CUR);
 				continue;
@@ -474,17 +474,17 @@ bool bhs_ecs_load_world(bhs_world_handle world, const char *filename)
 			pool->active[entity_id] = true;
 		}
 
-		BHS_LOG_INFO_CH(BHS_LOG_CHANNEL_ECS,
+		RI_LOG_INFO_CH(RI_LOG_CHANNEL_ECS,
 				"Loaded Component Type %d: %d entities",
 				chunk.type_id, chunk.count);
 	}
 
 	fclose(f);
-	BHS_LOG_INFO_CH(BHS_LOG_CHANNEL_ECS, "World loaded successfully.");
+	RI_LOG_INFO_CH(RI_LOG_CHANNEL_ECS, "World loaded successfully.");
 	return true;
 }
 
-bool bhs_ecs_peek_metadata(const char *filename, void *out_metadata,
+bool ri_ecs_peek_metadata(const char *filename, void *out_metadata,
 			   size_t metadata_size, uint32_t metadata_type_id)
 {
 	if (!filename || !out_metadata)
@@ -495,19 +495,19 @@ bool bhs_ecs_peek_metadata(const char *filename, void *out_metadata,
 		return false;
 
 	/* 1. Read Header */
-	struct bhs_save_header hdr;
+	struct ri_save_header hdr;
 	if (fread(&hdr, sizeof(hdr), 1, f) != 1) {
 		fclose(f);
 		return false;
 	}
 
-	if (hdr.magic != BHS_SAVE_MAGIC) {
+	if (hdr.magic != RI_SAVE_MAGIC) {
 		fclose(f);
 		return false;
 	}
 
 	/* 2. Scan Chunks */
-	struct bhs_save_chunk_header chunk;
+	struct ri_save_chunk_header chunk;
 	while (fread(&chunk, sizeof(chunk), 1, f) == 1) {
 		if (chunk.type_id == metadata_type_id) {
 			/* Found Metadata Chunk! */
@@ -548,7 +548,7 @@ bool bhs_ecs_peek_metadata(const char *filename, void *out_metadata,
 	return false; /* Not found */
 }
 
-bool bhs_ecs_update_metadata(const char *filename, const void *new_metadata,
+bool ri_ecs_update_metadata(const char *filename, const void *new_metadata,
 			     size_t metadata_size, uint32_t metadata_type_id)
 {
 	if (!filename || !new_metadata)
@@ -559,19 +559,19 @@ bool bhs_ecs_update_metadata(const char *filename, const void *new_metadata,
 		return false;
 
 	/* 1. Read Header and Verify Magic */
-	struct bhs_save_header hdr;
+	struct ri_save_header hdr;
 	if (fread(&hdr, sizeof(hdr), 1, f) != 1) {
 		fclose(f);
 		return false;
 	}
 
-	if (hdr.magic != BHS_SAVE_MAGIC) {
+	if (hdr.magic != RI_SAVE_MAGIC) {
 		fclose(f);
 		return false;
 	}
 
 	/* 2. Scan Chunks */
-	struct bhs_save_chunk_header chunk;
+	struct ri_save_chunk_header chunk;
 	while (fread(&chunk, sizeof(chunk), 1, f) == 1) {
 		if (chunk.type_id == metadata_type_id) {
 			/* Found Metadata Chunk! */
@@ -585,8 +585,8 @@ bool bhs_ecs_update_metadata(const char *filename, const void *new_metadata,
 
 			/* Verify strict size match for safety */
 			if (chunk.element_size != metadata_size) {
-				BHS_LOG_ERROR_CH(
-					BHS_LOG_CHANNEL_ECS,
+				RI_LOG_ERROR_CH(
+					RI_LOG_CHANNEL_ECS,
 					"Metadata resize not supported "
 					"(Disk=%d, Memory=%zu)",
 					chunk.element_size, metadata_size);
@@ -600,7 +600,7 @@ bool bhs_ecs_update_metadata(const char *filename, const void *new_metadata,
 			// long data_pos = ftell(f);
 
 			if (fwrite(new_metadata, metadata_size, 1, f) != 1) {
-				BHS_LOG_ERROR_CH(BHS_LOG_CHANNEL_ECS,
+				RI_LOG_ERROR_CH(RI_LOG_CHANNEL_ECS,
 						 "Failed to write metadata");
 				fclose(f);
 				return false;

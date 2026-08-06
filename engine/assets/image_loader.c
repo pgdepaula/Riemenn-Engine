@@ -379,9 +379,9 @@ static void unfilter_scanline(uint8_t *recon, const uint8_t *scanline,
 /*                                API PÚBLICA                                */
 /* ========================================================================= */
 
-bhs_image_t bhs_image_load(const char *path)
+ri_image_t ri_image_load(const char *path)
 {
-	bhs_image_t result = { 0 };
+	ri_image_t result = { 0 };
 	FILE *f = fopen(path, "rb");
 	if (!f) {
 		fprintf(stderr, "[PNG] Nao abriu arquivo: %s\n", path);
@@ -550,19 +550,19 @@ error:
 		free(idat_buf);
 	if (raw)
 		free(raw);
-	bhs_image_free(result);
+	ri_image_free(result);
 	return result;
 }
 
-void bhs_image_free(bhs_image_t img)
+void ri_image_free(ri_image_t img)
 {
 	if (img.data)
 		free(img.data);
 }
 
-bhs_image_t bhs_image_downsample_4x(bhs_image_t src)
+ri_image_t ri_image_downsample_4x(ri_image_t src)
 {
-	bhs_image_t dst = { 0 };
+	ri_image_t dst = { 0 };
 	if (!src.data || src.width % 4 != 0 || src.height % 4 != 0) {
 		fprintf(stderr,
 			"[IMAGE] Downsample 4x requer dimensoes multipas de 4. "

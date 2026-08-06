@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void save_ppm(const char *path, bhs_image_t *img)
+void save_ppm(const char *path, ri_image_t *img)
 {
 	FILE *f = fopen(path, "wb");
 	if (!f) return;
@@ -28,7 +28,7 @@ int main(int argc, char **argv)
 	printf("Iniciando teste SVG...\n");
 	
 	const char *path = (argc > 1) ? argv[1] : "engine/test_sample.svg";
-	bhs_svg_t *svg = bhs_svg_load(path);
+	ri_svg_t *svg = ri_svg_load(path);
 	
 	if (!svg) {
 		fprintf(stderr, "FALHA: Nao carregou SVG '%s'\n", path);
@@ -38,22 +38,22 @@ int main(int argc, char **argv)
 	printf("SVG Carregado com sucesso!\n");
 	
 	/* Rasteriza em tamanho original */
-	bhs_image_t img = bhs_svg_rasterize(svg, 1.0f);
+	ri_image_t img = ri_svg_rasterize(svg, 1.0f);
 	if (img.data) {
 		save_ppm("output_1x.ppm", &img);
-		bhs_image_free(img);
+		ri_image_free(img);
 	} else {
 		fprintf(stderr, "FALHA: Rasterizacao retornou nulo\n");
 	}
 
 	/* Rasteriza 2x */
-	bhs_image_t img2 = bhs_svg_rasterize(svg, 2.0f);
+	ri_image_t img2 = ri_svg_rasterize(svg, 2.0f);
 	if (img2.data) {
 		save_ppm("output_2x.ppm", &img2);
-		bhs_image_free(img2);
+		ri_image_free(img2);
 	}
 
-	bhs_svg_free(svg);
+	ri_svg_free(svg);
 	printf("Teste concluido.\n");
 	return 0;
 }

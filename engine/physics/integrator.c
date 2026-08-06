@@ -36,15 +36,15 @@
  * ============================================================================
  */
 
-void bhs_compute_accelerations(const struct bhs_system_state *state,
-			       struct bhs_vec3 acc[])
+void ri_compute_accelerations(const struct ri_system_state *state,
+			       struct ri_vec3 acc[])
 {
 	int n = state->n_bodies;
 
 	/* Zera acelerações usando Kahan accumulators */
-	struct bhs_kahan_vec3 acc_kahan[BHS_MAX_BODIES];
+	struct ri_kahan_vec3 acc_kahan[RI_MAX_BODIES];
 	for (int i = 0; i < n; i++) {
-		bhs_kahan_vec3_init(&acc_kahan[i]);
+		ri_kahan_vec3_init(&acc_kahan[i]);
 	}
 
 	/* Gravidade N-body com simetria (N²/2) */
@@ -56,8 +56,8 @@ void bhs_compute_accelerations(const struct bhs_system_state *state,
 			if (!state->bodies[j].is_alive)
 				continue;
 
-			const struct bhs_body_state_rk *bi = &state->bodies[i];
-			const struct bhs_body_state_rk *bj = &state->bodies[j];
+			const struct ri_body_state_rk *bi = &state->bodies[i];
+			const struct ri_body_state_rk *bj = &state->bodies[j];
 
 			/* Vetor distância */
 			double dx = bj->pos.x - bi->pos.x;
@@ -89,20 +89,20 @@ void bhs_compute_accelerations(const struct bhs_system_state *state,
 			/* Aceleração de i devido a j (só se i não é fixo) */
 			if (!bi->is_fixed) {
 				double factor_i = bj->gm * inv_dist3;
-				struct bhs_vec3 a_i = { .x = factor_i * dx,
+				struct ri_vec3 a_i = { .x = factor_i * dx,
 							.y = factor_i * dy,
 							.z = factor_i * dz };
-				bhs_kahan_vec3_add(&acc_kahan[i], a_i);
+				ri_kahan_vec3_add(&acc_kahan[i], a_i);
 
 				/* Correção 1PN (só pra buracos negros muito massivos) */
 				if (bj->gm > RELATIVISTIC_MASS_THRESHOLD) {
-					struct bhs_vec3 rel_pos = { dx, dy,
+					struct ri_vec3 rel_pos = { dx, dy,
 								    dz };
-					struct bhs_vec3 a_1pn =
-						bhs_compute_1pn_correction(
+					struct ri_vec3 a_1pn =
+						ri_compute_1pn_correction(
 							bj->gm, rel_pos,
 							bi->vel, C_SIM);
-					bhs_kahan_vec3_add(&acc_kahan[i],
+					ri_kahan_vec3_add(&acc_kahan[i],
 							   a_1pn);
 				}
 			}
@@ -112,26 +112,26 @@ void bhs_compute_accelerations(const struct bhs_system_state *state,
 			 * bj (Terra) ainda precisa sentir a gravidade! */
 			if (!bj->is_fixed) {
 				double factor_j = bi->gm * inv_dist3;
-				struct bhs_vec3 a_j = { .x = -factor_j * dx,
+				struct ri_vec3 a_j = { .x = -factor_j * dx,
 							.y = -factor_j * dy,
 							.z = -factor_j * dz };
-				bhs_kahan_vec3_add(&acc_kahan[j], a_j);
+				ri_kahan_vec3_add(&acc_kahan[j], a_j);
 
 				/* Correção 1PN para j se i é muito massivo */
 				if (bi->gm > RELATIVISTIC_MASS_THRESHOLD) {
-					struct bhs_vec3 rel_pos = { -dx, -dy,
+					struct ri_vec3 rel_pos = { -dx, -dy,
 								    -dz };
-					struct bhs_vec3 a_1pn =
-						bhs_compute_1pn_correction(
+					struct ri_vec3 a_1pn =
+						ri_compute_1pn_correction(
 							bi->gm, rel_pos,
 							bj->vel, C_SIM);
-					bhs_kahan_vec3_add(&acc_kahan[j],
+					ri_kahan_vec3_add(&acc_kahan[j],
 							   a_1pn);
 				}
 
 				/* [NEW] Correção J2 (Oblateness) se body i for achatado */
 				if (bi->j2 > 0.0 && bi->radius > 0.0) {
-					struct bhs_vec3 rel_pos_j = {
+					struct ri_vec3 rel_pos_j = {
 						-dx, -dy, -dz
 					}; /* Pos de j relativa a i */
 					/* Assumindo que o corpo i está alinhado com Z (simplificação comum) 
@@ -141,11 +141,11 @@ void bhs_compute_accelerations(const struct bhs_system_state *state,
 					   Por enquanto, J2 assume eixo Z alinhado com momento angular do sistema (eclíptica). 
 					   Para planetas, isso é razoável se Z for "Norte do Sistema". */
 
-					struct bhs_vec3 a_j2 =
-						bhs_compute_j2_correction(
+					struct ri_vec3 a_j2 =
+						ri_compute_j2_correction(
 							bi->gm, bi->j2,
 							bi->radius, rel_pos_j);
-					bhs_kahan_vec3_add(&acc_kahan[j], a_j2);
+					ri_kahan_vec3_add(&acc_kahan[j], a_j2);
 				}
 			}
 
@@ -153,21 +153,21 @@ void bhs_compute_accelerations(const struct bhs_system_state *state,
 			   Sim, mas geralmente desprezível se I for o Sol ou outro planeta distante.
 			   Mas para sistemas binários, ambos sentem. */
 			if (!bi->is_fixed && bj->j2 > 0.0 && bj->radius > 0.0) {
-				struct bhs_vec3 rel_pos_i = {
+				struct ri_vec3 rel_pos_i = {
 					dx, dy, dz
 				}; /* Pos de i relativa a j */
-				struct bhs_vec3 a_j2_i =
-					bhs_compute_j2_correction(
+				struct ri_vec3 a_j2_i =
+					ri_compute_j2_correction(
 						bj->gm, bj->j2, bj->radius,
 						rel_pos_i);
-				bhs_kahan_vec3_add(&acc_kahan[i], a_j2_i);
+				ri_kahan_vec3_add(&acc_kahan[i], a_j2_i);
 			}
 		}
 	}
 
 	/* Extrai resultados dos acumuladores */
 	for (int i = 0; i < n; i++) {
-		acc[i] = bhs_kahan_vec3_get(&acc_kahan[i]);
+		acc[i] = ri_kahan_vec3_get(&acc_kahan[i]);
 	}
 }
 
@@ -181,9 +181,9 @@ void bhs_compute_accelerations(const struct bhs_system_state *state,
  * Referência: MTW Gravitation, eq. 39.41
  */
 
-struct bhs_vec3 bhs_compute_1pn_correction(double gm_central,
-					   struct bhs_vec3 pos,
-					   struct bhs_vec3 vel, double c)
+struct ri_vec3 ri_compute_1pn_correction(double gm_central,
+					   struct ri_vec3 pos,
+					   struct ri_vec3 vel, double c)
 {
 	double c2 = c * c;
 
@@ -192,13 +192,13 @@ struct bhs_vec3 bhs_compute_1pn_correction(double gm_central,
 	double r = sqrt(r2);
 
 	if (r < 1e-10) {
-		return (struct bhs_vec3){ 0, 0, 0 };
+		return (struct ri_vec3){ 0, 0, 0 };
 	}
 
 	double inv_r = 1.0 / r;
 
 	/* Versor radial */
-	struct bhs_vec3 r_hat = { .x = pos.x * inv_r,
+	struct ri_vec3 r_hat = { .x = pos.x * inv_r,
 				  .y = pos.y * inv_r,
 				  .z = pos.z * inv_r };
 
@@ -223,7 +223,7 @@ struct bhs_vec3 bhs_compute_1pn_correction(double gm_central,
 	/* Termo tangencial: 4 * v_r */
 	double tangential_term = 4.0 * v_r;
 
-	struct bhs_vec3 a_1pn = {
+	struct ri_vec3 a_1pn = {
 		.x = coeff * (radial_term * r_hat.x + tangential_term * vel.x),
 		.y = coeff * (radial_term * r_hat.y + tangential_term * vel.y),
 		.z = coeff * (radial_term * r_hat.z + tangential_term * vel.z)
@@ -245,15 +245,15 @@ struct bhs_vec3 bhs_compute_1pn_correction(double gm_central,
  *   a_z = -3/2 * J2 * (GM/r²) * (R_eq/r)² * z/r * (5z²/r² - 3)
  */
 
-struct bhs_vec3 bhs_compute_j2_correction(double gm_central, double j2,
-					  double r_eq, struct bhs_vec3 pos)
+struct ri_vec3 ri_compute_j2_correction(double gm_central, double j2,
+					  double r_eq, struct ri_vec3 pos)
 {
 	double x = pos.x, y = pos.y, z = pos.z;
 	double r2 = x * x + y * y + z * z;
 	double r = sqrt(r2);
 
 	if (r < 1e-10 || j2 == 0) {
-		return (struct bhs_vec3){ 0, 0, 0 };
+		return (struct ri_vec3){ 0, 0, 0 };
 	}
 
 	double r5 = r2 * r2 * r;
@@ -267,7 +267,7 @@ struct bhs_vec3 bhs_compute_j2_correction(double gm_central, double j2,
 	double xy_factor = 5.0 * z2 / r2 - 1.0;
 	double z_factor = 5.0 * z2 / r2 - 3.0;
 
-	struct bhs_vec3 a_j2 = { .x = coeff * x * xy_factor,
+	struct ri_vec3 a_j2 = { .x = coeff * x * xy_factor,
 				 .y = coeff * y * xy_factor,
 				 .z = coeff * z * z_factor };
 
@@ -287,14 +287,14 @@ struct bhs_vec3 bhs_compute_j2_correction(double gm_central, double j2,
 
 #define TIDAL_K 1.0e-5 /* Coeficiente fictício para acelerar locking */
 
-void bhs_compute_torques(const struct bhs_system_state *state,
-			 struct bhs_vec3 torques[])
+void ri_compute_torques(const struct ri_system_state *state,
+			 struct ri_vec3 torques[])
 {
 	int n = state->n_bodies;
 
 	/* Zera torques */
 	for (int i = 0; i < n; i++) {
-		torques[i] = (struct bhs_vec3){ 0, 0, 0 };
+		torques[i] = (struct ri_vec3){ 0, 0, 0 };
 	}
 
 	for (int i = 0; i < n; i++) {
@@ -313,8 +313,8 @@ void bhs_compute_torques(const struct bhs_system_state *state,
 			if (state->bodies[j].mass < state->bodies[i].mass * 0.1)
 				continue;
 
-			const struct bhs_body_state_rk *bi = &state->bodies[i];
-			const struct bhs_body_state_rk *bj = &state->bodies[j];
+			const struct ri_body_state_rk *bi = &state->bodies[i];
+			const struct ri_body_state_rk *bj = &state->bodies[j];
 
 			double dx = bj->pos.x - bi->pos.x;
 			double dy = bj->pos.y - bi->pos.y;
@@ -332,15 +332,15 @@ void bhs_compute_torques(const struct bhs_system_state *state,
 			double dvy = bj->vel.y - bi->vel.y;
 			double dvz = bj->vel.z - bi->vel.z;
 
-			struct bhs_vec3 cross = { .x = dy * dvz - dz * dvy,
+			struct ri_vec3 cross = { .x = dy * dvz - dz * dvy,
 						  .y = dz * dvx - dx * dvz,
 						  .z = dx * dvy - dy * dvx };
-			struct bhs_vec3 w_orb = { .x = cross.x / r2,
+			struct ri_vec3 w_orb = { .x = cross.x / r2,
 						  .y = cross.y / r2,
 						  .z = cross.z / r2 };
 
 			/* Diferença de velocidade angular (Spin - Orbit) */
-			struct bhs_vec3 dw = { .x = bi->rot_vel.x - w_orb.x,
+			struct ri_vec3 dw = { .x = bi->rot_vel.x - w_orb.x,
 					       .y = bi->rot_vel.y - w_orb.y,
 					       .z = bi->rot_vel.z - w_orb.z };
 
@@ -379,25 +379,25 @@ void bhs_compute_torques(const struct bhs_system_state *state,
  *   f(y) = (vel, acc(pos))
  */
 
-void bhs_integrator_rk4(struct bhs_system_state *state, double dt)
+void ri_integrator_rk4(struct ri_system_state *state, double dt)
 {
 	int n = state->n_bodies;
 	if (n == 0)
 		return;
 
 	/* Arrays temporários para k1, k2, k3, k4 */
-	struct bhs_vec3 k1_pos[BHS_MAX_BODIES], k1_vel[BHS_MAX_BODIES];
-	struct bhs_vec3 k2_pos[BHS_MAX_BODIES], k2_vel[BHS_MAX_BODIES];
-	struct bhs_vec3 k3_pos[BHS_MAX_BODIES], k3_vel[BHS_MAX_BODIES];
-	struct bhs_vec3 k4_pos[BHS_MAX_BODIES], k4_vel[BHS_MAX_BODIES];
+	struct ri_vec3 k1_pos[RI_MAX_BODIES], k1_vel[RI_MAX_BODIES];
+	struct ri_vec3 k2_pos[RI_MAX_BODIES], k2_vel[RI_MAX_BODIES];
+	struct ri_vec3 k3_pos[RI_MAX_BODIES], k3_vel[RI_MAX_BODIES];
+	struct ri_vec3 k4_pos[RI_MAX_BODIES], k4_vel[RI_MAX_BODIES];
 
 	/* Estado temporário para avaliações intermediárias */
-	struct bhs_system_state temp_state;
+	struct ri_system_state temp_state;
 	memcpy(&temp_state, state, sizeof(temp_state));
 
 	/* ===== k1 = f(t, y) ===== */
-	struct bhs_vec3 acc[BHS_MAX_BODIES];
-	bhs_compute_accelerations(state, acc);
+	struct ri_vec3 acc[RI_MAX_BODIES];
+	ri_compute_accelerations(state, acc);
 
 	for (int i = 0; i < n; i++) {
 		k1_pos[i] = state->bodies[i].vel;
@@ -419,7 +419,7 @@ void bhs_integrator_rk4(struct bhs_system_state *state, double dt)
 		temp_state.bodies[i].vel.z =
 			state->bodies[i].vel.z + 0.5 * dt * k1_vel[i].z;
 	}
-	bhs_compute_accelerations(&temp_state, acc);
+	ri_compute_accelerations(&temp_state, acc);
 
 	for (int i = 0; i < n; i++) {
 		k2_pos[i] = temp_state.bodies[i].vel;
@@ -441,7 +441,7 @@ void bhs_integrator_rk4(struct bhs_system_state *state, double dt)
 		temp_state.bodies[i].vel.z =
 			state->bodies[i].vel.z + 0.5 * dt * k2_vel[i].z;
 	}
-	bhs_compute_accelerations(&temp_state, acc);
+	ri_compute_accelerations(&temp_state, acc);
 
 	for (int i = 0; i < n; i++) {
 		k3_pos[i] = temp_state.bodies[i].vel;
@@ -463,7 +463,7 @@ void bhs_integrator_rk4(struct bhs_system_state *state, double dt)
 		temp_state.bodies[i].vel.z =
 			state->bodies[i].vel.z + dt * k3_vel[i].z;
 	}
-	bhs_compute_accelerations(&temp_state, acc);
+	ri_compute_accelerations(&temp_state, acc);
 
 	for (int i = 0; i < n; i++) {
 		k4_pos[i] = temp_state.bodies[i].vel;
@@ -478,14 +478,14 @@ void bhs_integrator_rk4(struct bhs_system_state *state, double dt)
 	/* Para rotação, usamos Euler simples ou integrador separado? 
 	   Para manter consistência, deveriamos fazer RK4 para rotação também.
 	   Simplificação: Usar Euler para rotação (já que torque muda lentamente) 
-	   OU chamar bhs_compute_torques em cada etapa K.
+	   OU chamar ri_compute_torques em cada etapa K.
 	   
 	   Vou optar por Euler simples para rotação para economizar 4xN^2 checks de torque,
 	   pois maré é força fraca de variacao lenta comparada a orbita.
 	*/
 
-	struct bhs_vec3 torques[BHS_MAX_BODIES];
-	bhs_compute_torques(state, torques);
+	struct ri_vec3 torques[RI_MAX_BODIES];
+	ri_compute_torques(state, torques);
 
 	for (int i = 0; i < n; i++) {
 		if (state->bodies[i].is_fixed)
@@ -552,16 +552,16 @@ void bhs_integrator_rk4(struct bhs_system_state *state, double dt)
  * Referência: Hockney & Eastwood (1988), "Computer Simulation Using Particles"
  */
 
-void bhs_integrator_leapfrog(struct bhs_system_state *state, double dt)
+void ri_integrator_leapfrog(struct ri_system_state *state, double dt)
 {
 	int n = state->n_bodies;
 	if (n == 0)
 		return;
 
-	struct bhs_vec3 acc[BHS_MAX_BODIES];
+	struct ri_vec3 acc[RI_MAX_BODIES];
 
 	/* ===== KICK 1: v(t + dt/2) = v(t) + a(t) * dt/2 ===== */
-	bhs_compute_accelerations(state, acc);
+	ri_compute_accelerations(state, acc);
 
 	double half_dt = 0.5 * dt;
 	for (int i = 0; i < n; i++) {
@@ -584,11 +584,11 @@ void bhs_integrator_leapfrog(struct bhs_system_state *state, double dt)
 	}
 
 	/* ===== KICK 2: v(t + dt) = v(t + dt/2) + a(t + dt) * dt/2 ===== */
-	bhs_compute_accelerations(state, acc);
+	ri_compute_accelerations(state, acc);
 
 	/* [NEW] Torque Calculation (Once per step for Leapfrog too) */
-	struct bhs_vec3 torques[BHS_MAX_BODIES];
-	bhs_compute_torques(state, torques);
+	struct ri_vec3 torques[RI_MAX_BODIES];
+	ri_compute_torques(state, torques);
 
 	for (int i = 0; i < n; i++) {
 		if (state->bodies[i].is_fixed || !state->bodies[i].is_alive)
@@ -622,7 +622,7 @@ void bhs_integrator_leapfrog(struct bhs_system_state *state, double dt)
  * YOSHIDA (4th Order Symplectic)
  * ============================================================================
  */
-void bhs_integrator_yoshida(struct bhs_system_state *state, double dt)
+void ri_integrator_yoshida(struct ri_system_state *state, double dt)
 {
 	int n = state->n_bodies;
 	if (n == 0)
@@ -645,7 +645,7 @@ void bhs_integrator_yoshida(struct bhs_system_state *state, double dt)
 	const double d2 = w0;
 	const double d3 = w1;
 
-	struct bhs_vec3 acc[BHS_MAX_BODIES];
+	struct ri_vec3 acc[RI_MAX_BODIES];
 
 	/* Step 1: x1 = x0 + c1 * v0 * dt */
 	for (int i = 0; i < n; i++) {
@@ -657,7 +657,7 @@ void bhs_integrator_yoshida(struct bhs_system_state *state, double dt)
 	}
 
 	/* Step 2: v1 = v0 + d1 * a(x1) * dt */
-	bhs_compute_accelerations(state, acc);
+	ri_compute_accelerations(state, acc);
 	for (int i = 0; i < n; i++) {
 		if (!state->bodies[i].is_alive || state->bodies[i].is_fixed)
 			continue;
@@ -676,7 +676,7 @@ void bhs_integrator_yoshida(struct bhs_system_state *state, double dt)
 	}
 
 	/* Step 4: v2 = v1 + d2 * a(x2) * dt */
-	bhs_compute_accelerations(state, acc);
+	ri_compute_accelerations(state, acc);
 	for (int i = 0; i < n; i++) {
 		if (!state->bodies[i].is_alive || state->bodies[i].is_fixed)
 			continue;
@@ -695,7 +695,7 @@ void bhs_integrator_yoshida(struct bhs_system_state *state, double dt)
 	}
 
 	/* Step 6: v3 = v2 + d3 * a(x3) * dt */
-	bhs_compute_accelerations(state, acc);
+	ri_compute_accelerations(state, acc);
 	for (int i = 0; i < n; i++) {
 		if (!state->bodies[i].is_alive || state->bodies[i].is_fixed)
 			continue;
@@ -722,7 +722,7 @@ void bhs_integrator_yoshida(struct bhs_system_state *state, double dt)
  * Runge-Kutta-Fehlberg usa ordem 4 e 5 para estimar erro e ajustar timestep.
  */
 
-double bhs_integrator_rkf45(struct bhs_system_state *state, double dt,
+double ri_integrator_rkf45(struct ri_system_state *state, double dt,
 			    double tolerance, double *dt_out)
 {
 	/* 
@@ -738,19 +738,19 @@ double bhs_integrator_rkf45(struct bhs_system_state *state, double dt,
 	}
 
 	/* Salva estado original */
-	struct bhs_system_state original;
+	struct ri_system_state original;
 	memcpy(&original, state, sizeof(original));
 
 	/* Integra com dt inteiro */
-	struct bhs_system_state state_full;
+	struct ri_system_state state_full;
 	memcpy(&state_full, &original, sizeof(state_full));
-	bhs_integrator_rk4(&state_full, dt);
+	ri_integrator_rk4(&state_full, dt);
 
 	/* Integra com dois passos de dt/2 */
-	struct bhs_system_state state_half;
+	struct ri_system_state state_half;
 	memcpy(&state_half, &original, sizeof(state_half));
-	bhs_integrator_rk4(&state_half, dt / 2.0);
-	bhs_integrator_rk4(&state_half, dt / 2.0);
+	ri_integrator_rk4(&state_half, dt / 2.0);
+	ri_integrator_rk4(&state_half, dt / 2.0);
 
 	/* Estima erro como diferença entre as duas integrações */
 	double max_error = 0.0;
@@ -795,23 +795,23 @@ double bhs_integrator_rkf45(struct bhs_system_state *state, double dt,
  * ============================================================================
  */
 
-void bhs_compute_invariants(const struct bhs_system_state *state,
-			    struct bhs_invariants *inv)
+void ri_compute_invariants(const struct ri_system_state *state,
+			    struct ri_invariants *inv)
 {
 	int n = state->n_bodies;
 
 	/* Inicializa com Kahan */
-	struct bhs_kahan E_kinetic, E_potential;
-	struct bhs_kahan_vec3 momentum, angular_momentum;
+	struct ri_kahan E_kinetic, E_potential;
+	struct ri_kahan_vec3 momentum, angular_momentum;
 
-	bhs_kahan_init(&E_kinetic);
-	bhs_kahan_init(&E_potential);
-	bhs_kahan_vec3_init(&momentum);
-	bhs_kahan_vec3_init(&angular_momentum);
+	ri_kahan_init(&E_kinetic);
+	ri_kahan_init(&E_potential);
+	ri_kahan_vec3_init(&momentum);
+	ri_kahan_vec3_init(&angular_momentum);
 
 	/* Energia cinética e momento linear */
 	for (int i = 0; i < n; i++) {
-		const struct bhs_body_state_rk *b = &state->bodies[i];
+		const struct ri_body_state_rk *b = &state->bodies[i];
 		if (!b->is_alive)
 			continue;
 
@@ -819,19 +819,19 @@ void bhs_compute_invariants(const struct bhs_system_state *state,
 			    b->vel.z * b->vel.z;
 
 		/* K = 0.5 * m * v² */
-		bhs_kahan_add(&E_kinetic, 0.5 * b->mass * v2);
+		ri_kahan_add(&E_kinetic, 0.5 * b->mass * v2);
 
 		/* p = m * v */
-		struct bhs_vec3 p = { .x = b->mass * b->vel.x,
+		struct ri_vec3 p = { .x = b->mass * b->vel.x,
 				      .y = b->mass * b->vel.y,
 				      .z = b->mass * b->vel.z };
-		bhs_kahan_vec3_add(&momentum, p);
+		ri_kahan_vec3_add(&momentum, p);
 
 		/* L = r × p */
-		struct bhs_vec3 L = { .x = b->pos.y * p.z - b->pos.z * p.y,
+		struct ri_vec3 L = { .x = b->pos.y * p.z - b->pos.z * p.y,
 				      .y = b->pos.z * p.x - b->pos.x * p.z,
 				      .z = b->pos.x * p.y - b->pos.y * p.x };
-		bhs_kahan_vec3_add(&angular_momentum, L);
+		ri_kahan_vec3_add(&angular_momentum, L);
 	}
 
 	/* Energia potencial gravitacional */
@@ -843,8 +843,8 @@ void bhs_compute_invariants(const struct bhs_system_state *state,
 			if (!state->bodies[j].is_alive)
 				continue;
 
-			const struct bhs_body_state_rk *bi = &state->bodies[i];
-			const struct bhs_body_state_rk *bj = &state->bodies[j];
+			const struct ri_body_state_rk *bi = &state->bodies[i];
+			const struct ri_body_state_rk *bj = &state->bodies[j];
 
 			double dx = bj->pos.x - bi->pos.x;
 			double dy = bj->pos.y - bi->pos.y;
@@ -854,18 +854,18 @@ void bhs_compute_invariants(const struct bhs_system_state *state,
 
 			/* U = -G * m1 * m2 / r = -gm1 * m2 / r */
 			double U = -bi->gm * bj->mass / r;
-			bhs_kahan_add(&E_potential, U);
+			ri_kahan_add(&E_potential, U);
 		}
 	}
 
 	/* Extrai resultados */
-	inv->energy = bhs_kahan_get(&E_kinetic) + bhs_kahan_get(&E_potential);
-	inv->momentum = bhs_kahan_vec3_get(&momentum);
-	inv->angular_momentum = bhs_kahan_vec3_get(&angular_momentum);
+	inv->energy = ri_kahan_get(&E_kinetic) + ri_kahan_get(&E_potential);
+	inv->momentum = ri_kahan_vec3_get(&momentum);
+	inv->angular_momentum = ri_kahan_vec3_get(&angular_momentum);
 }
 
-bool bhs_check_conservation(const struct bhs_invariants *initial,
-			    const struct bhs_invariants *current,
+bool ri_check_conservation(const struct ri_invariants *initial,
+			    const struct ri_invariants *current,
 			    double tolerance)
 {
 	/* Verifica energia */

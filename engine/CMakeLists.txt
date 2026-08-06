@@ -1,26 +1,19 @@
-# engine/CMakeLists.txt
+add_subdirectory(foundation)
+add_subdirectory(math)
+add_subdirectory(platform)
+add_subdirectory(rhi)
+add_subdirectory(ecs)
+add_subdirectory(physics)
+add_subdirectory(assets)
+add_subdirectory(geometry)
+add_subdirectory(render)
+add_subdirectory(scene)
+add_subdirectory(ui)
 
-add_library(bhs_engine STATIC)
-
-# Fontes recursivos
-file(GLOB_RECURSE ENGINE_SOURCES "*.c")
-# Remover arquivos que podem ser testes ou ferramentas se houver
-list(FILTER ENGINE_SOURCES EXCLUDE REGEX "tests/.*")
-
-target_sources(bhs_engine PRIVATE ${ENGINE_SOURCES})
-
-# Includes Públicos
-target_include_directories(bhs_engine PUBLIC 
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}
+add_library(ri_engine INTERFACE)
+add_library(Riemenn::Engine ALIAS ri_engine)
+target_link_libraries(ri_engine INTERFACE
+    ri_foundation ri_math ri_platform ri_rhi ri_ecs ri_physics
+    ri_assets ri_geometry ri_render ri_scene ri_ui
 )
-
-# Dependências (Engine usa gui e Math)
-target_link_libraries(bhs_engine PUBLIC 
-    bhs_gui
-    bhs_math
-)
-
-set_project_warnings(bhs_engine)
-
-add_library(BHS::Engine ALIAS bhs_engine)
+target_include_directories(ri_engine INTERFACE ${CMAKE_SOURCE_DIR})

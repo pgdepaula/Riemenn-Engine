@@ -17,7 +17,7 @@
 /*                            ESTRUTURAS INTERNAS                            */
 /* ========================================================================= */
 
-#define BHS_PI 3.14159265358979323846f
+#define RI_PI 3.14159265358979323846f
 
 /* Estruturas agora estão em svg_loader.h */
 
@@ -119,9 +119,9 @@ static uint32_t parse_color(const char *str)
 /*                           GEOMETRY BUILDER                                */
 /* ========================================================================= */
 
-static bhs_shape_t *alloc_shape(void)
+static ri_shape_t *alloc_shape(void)
 {
-	bhs_shape_t *shape = calloc(1, sizeof(bhs_shape_t));
+	ri_shape_t *shape = calloc(1, sizeof(ri_shape_t));
 	shape->fill_color =
 		0xFFFFFFFF; /* Branco opaco default (melhor para UI) */
 	shape->has_fill = 1;
@@ -130,20 +130,20 @@ static bhs_shape_t *alloc_shape(void)
 	return shape;
 }
 
-static void free_paths(bhs_path_t *p)
+static void free_paths(ri_path_t *p)
 {
 	while (p) {
-		bhs_path_t *next = p->next;
+		ri_path_t *next = p->next;
 		free(p->pts);
 		free(p);
 		p = next;
 	}
 }
 
-static void free_shapes(bhs_shape_t *s)
+static void free_shapes(ri_shape_t *s)
 {
 	while (s) {
-		bhs_shape_t *next = s->next;
+		ri_shape_t *next = s->next;
 		free_paths(s->paths);
 		free(s);
 		s = next;
@@ -151,16 +151,16 @@ static void free_shapes(bhs_shape_t *s)
 }
 
 /* Adiciona ponto a um path */
-static void add_point(bhs_path_t *path, float x, float y)
+static void add_point(ri_path_t *path, float x, float y)
 {
-	path->pts = realloc(path->pts, (path->n_pts + 1) * sizeof(bhs_vec2_t));
+	path->pts = realloc(path->pts, (path->n_pts + 1) * sizeof(ri_vec2_t));
 	path->pts[path->n_pts].x = x;
 	path->pts[path->n_pts].y = y;
 	path->n_pts++;
 }
 
 /* Cubic Bezier Tessellation (simples e recursiva ou adaptativa) */
-static void tess_cubic(bhs_path_t *path, float x1, float y1, float x2, float y2,
+static void tess_cubic(ri_path_t *path, float x1, float y1, float x2, float y2,
 		       float x3, float y3, float x4, float y4, int level)
 {
 	/* Distancia dos pontos de controle ao segmento base */
@@ -194,7 +194,7 @@ static void tess_cubic(bhs_path_t *path, float x1, float y1, float x2, float y2,
 }
 
 /* Quadratic Bezier -> Cubic -> Tess */
-static void tess_quad(bhs_path_t *path, float x1, float y1, float x2, float y2,
+static void tess_quad(ri_path_t *path, float x1, float y1, float x2, float y2,
 		      float x3, float y3)
 {
 	tess_cubic(path, x1, y1, x1 + 2.0f / 3.0f * (x2 - x1),
@@ -203,9 +203,9 @@ static void tess_quad(bhs_path_t *path, float x1, float y1, float x2, float y2,
 }
 
 /* Parse "d" attribute */
-static void parse_path_d(bhs_shape_t *shape, const char *d)
+static void parse_path_d(ri_shape_t *shape, const char *d)
 {
-	bhs_path_t *path = NULL;
+	ri_path_t *path = NULL;
 	float cur_x = 0, cur_y = 0;
 	float start_x = 0, start_y = 0;
 	float c1x, c1y, c2x, c2y;
@@ -240,8 +240,8 @@ static void parse_path_d(bhs_shape_t *shape, const char *d)
 
 			/* Novo subpath */
 			{
-				bhs_path_t *new_p =
-					calloc(1, sizeof(bhs_path_t));
+				ri_path_t *new_p =
+					calloc(1, sizeof(ri_path_t));
 				new_p->next = shape->paths;
 				shape->paths = new_p;
 				path = new_p;
@@ -256,8 +256,8 @@ static void parse_path_d(bhs_shape_t *shape, const char *d)
 			cur_x += parse_float(&d);
 			cur_y += parse_float(&d);
 			{
-				bhs_path_t *new_p =
-					calloc(1, sizeof(bhs_path_t));
+				ri_path_t *new_p =
+					calloc(1, sizeof(ri_path_t));
 				new_p->next = shape->paths;
 				shape->paths = new_p;
 				path = new_p;
@@ -500,9 +500,9 @@ found:
 	out_val[i] = 0;
 }
 
-bhs_svg_t *bhs_svg_parse(const char *buffer)
+ri_svg_t *ri_svg_parse(const char *buffer)
 {
-	bhs_svg_t *svg = calloc(1, sizeof(bhs_svg_t));
+	ri_svg_t *svg = calloc(1, sizeof(ri_svg_t));
 	const char *p = buffer;
 
 	/* Tenta achar tamanho do SVG */
@@ -556,7 +556,7 @@ bhs_svg_t *bhs_svg_parse(const char *buffer)
 		/* Verifica tipo de tag */
 		if (strncmp(tag_start, "<path", 5) == 0) {
 			/* Parser de Path */
-			bhs_shape_t *shape = alloc_shape();
+			ri_shape_t *shape = alloc_shape();
 
 			/* Extrai atributos */
 			/* Parse 'd' - precisa alocar buffer grande pois pode ser enorme */
@@ -599,7 +599,7 @@ bhs_svg_t *bhs_svg_parse(const char *buffer)
 			shape->next = svg->shapes;
 			svg->shapes = shape;
 		} else if (strncmp(tag_start, "<rect", 5) == 0) {
-			bhs_shape_t *shape = alloc_shape();
+			ri_shape_t *shape = alloc_shape();
 			float rx = 0, ry = 0, rw = 0, rh = 0;
 
 			parse_attr(tag_start, "x", val, sizeof(val));
@@ -624,7 +624,7 @@ bhs_svg_t *bhs_svg_parse(const char *buffer)
 			}
 
 			/* Converte rect para path */
-			bhs_path_t *p_rect = calloc(1, sizeof(bhs_path_t));
+			ri_path_t *p_rect = calloc(1, sizeof(ri_path_t));
 			add_point(p_rect, rx, ry);
 			add_point(p_rect, rx + rw, ry);
 			add_point(p_rect, rx + rw, ry + rh);
@@ -646,7 +646,7 @@ bhs_svg_t *bhs_svg_parse(const char *buffer)
 			shape->next = svg->shapes;
 			svg->shapes = shape;
 		} else if (strncmp(tag_start, "<circle", 7) == 0) {
-			bhs_shape_t *shape = alloc_shape();
+			ri_shape_t *shape = alloc_shape();
 			float cx = 0, cy = 0, r = 0;
 
 			parse_attr(tag_start, "cx", val, sizeof(val));
@@ -666,11 +666,11 @@ bhs_svg_t *bhs_svg_parse(const char *buffer)
 			}
 
 			/* Converte círculo para path poligonal (32 segmentos) */
-			bhs_path_t *p_circ = calloc(1, sizeof(bhs_path_t));
+			ri_path_t *p_circ = calloc(1, sizeof(ri_path_t));
 			int segs = 32;
 			for (int i = 0; i <= segs; i++) {
 				float ang =
-					(float)i * 2.0f * BHS_PI / (float)segs;
+					(float)i * 2.0f * RI_PI / (float)segs;
 				add_point(p_circ, cx + cosf(ang) * r,
 					  cy + sinf(ang) * r);
 			}
@@ -699,10 +699,10 @@ bhs_svg_t *bhs_svg_parse(const char *buffer)
 	}
 
 	// printf("[SVG] Parsed SVG: %dx%d, %p shapes\n", (int)svg->width, (int)svg->height, (void*)svg->shapes);
-	// for(bhs_shape_t *s = svg->shapes; s; s=s->next) {
+	// for(ri_shape_t *s = svg->shapes; s; s=s->next) {
 	//     printf("[SVG]   Shape: fill=%d(%08X) stroke=%d(%08X) paths=%p\n",
 	//         s->has_fill, s->fill_color, s->has_stroke, s->stroke_color, (void*)s->paths);
-	//     for(bhs_path_t *path = s->paths; path; path=path->next) {
+	//     for(ri_path_t *path = s->paths; path; path=path->next) {
 	//         printf("[SVG]     Path: %d points\n", path->n_pts);
 	//         if(path->n_pts > 0) printf("[SVG]       Start: %.1f, %.1f\n", path->pts[0].x, path->pts[0].y);
 	//     }
@@ -712,7 +712,7 @@ bhs_svg_t *bhs_svg_parse(const char *buffer)
 	return svg;
 }
 
-bhs_svg_t *bhs_svg_load(const char *path)
+ri_svg_t *ri_svg_load(const char *path)
 {
 	FILE *f = fopen(path, "rb");
 	if (!f)
@@ -732,12 +732,12 @@ bhs_svg_t *bhs_svg_load(const char *path)
 	buf[size] = 0;
 	fclose(f);
 
-	bhs_svg_t *svg = bhs_svg_parse(buf);
+	ri_svg_t *svg = ri_svg_parse(buf);
 	free(buf);
 	return svg;
 }
 
-void bhs_svg_free(bhs_svg_t *svg)
+void ri_svg_free(ri_svg_t *svg)
 {
 	if (!svg)
 		return;
@@ -760,17 +760,17 @@ typedef struct {
 	struct edge *next;
 } edge_t;
 
-bhs_image_t bhs_svg_rasterize(const bhs_svg_t *svg, float scale)
+ri_image_t ri_svg_rasterize(const ri_svg_t *svg, float scale)
 {
 	int w = (int)(svg->width * scale);
 	int h = (int)(svg->height * scale);
 
-	bhs_image_t img = { w, h, 4, calloc(w * h * 4, 1) };
+	ri_image_t img = { w, h, 4, calloc(w * h * 4, 1) };
 	if (!img.data)
 		return img;
 
 	/* Para cada Shape */
-	for (bhs_shape_t *s = svg->shapes; s; s = s->next) {
+	for (ri_shape_t *s = svg->shapes; s; s = s->next) {
 		if (!s->has_fill)
 			continue; /* Ignore strokes for now in rasterizer simple version */
 		/* Parse color */
@@ -789,7 +789,7 @@ bhs_image_t bhs_svg_rasterize(const bhs_svg_t *svg, float scale)
 			float *nodes = malloc(cap * sizeof(float));
 			int nodes_cnt = 0;
 
-			for (bhs_path_t *p = s->paths; p; p = p->next) {
+			for (ri_path_t *p = s->paths; p; p = p->next) {
 				if (p->n_pts < 3)
 					continue;
 
@@ -866,7 +866,7 @@ bhs_image_t bhs_svg_rasterize(const bhs_svg_t *svg, float scale)
 	return img;
 }
 
-bhs_image_t bhs_svg_rasterize_fit(const bhs_svg_t *svg, int width, int height)
+ri_image_t ri_svg_rasterize_fit(const ri_svg_t *svg, int width, int height)
 {
 	float sx = (float)width / svg->width;
 	float sy = (float)height / svg->height;
@@ -874,5 +874,5 @@ bhs_image_t bhs_svg_rasterize_fit(const bhs_svg_t *svg, int width, int height)
 	float scale = (sx < sy) ? sx : sy;
 
 	/* Poderiamos centralizar mas por enquanto top-left */
-	return bhs_svg_rasterize(svg, scale);
+	return ri_svg_rasterize(svg, scale);
 }

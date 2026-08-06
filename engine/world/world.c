@@ -5,14 +5,14 @@
 
 #include "engine/ecs/ecs.h"
 
-static bhs_world_handle g_world = NULL;
+static ri_world_handle g_world = NULL;
 
-void bhs_world_init(void)
+void ri_world_init(void)
 {
-	g_world = bhs_ecs_create_world();
+	g_world = ri_ecs_create_world();
 }
 
-bhs_world_handle bhs_world_get(void)
+ri_world_handle ri_world_get(void)
 {
 	return g_world;
 }

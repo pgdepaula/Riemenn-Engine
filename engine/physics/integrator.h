@@ -11,11 +11,11 @@
  * - Kahan summation para acumulação precisa
  */
 
-#ifndef BHS_ENGINE_INTEGRATOR_H
-#define BHS_ENGINE_INTEGRATOR_H
+#ifndef RI_ENGINE_INTEGRATOR_H
+#define RI_ENGINE_INTEGRATOR_H
 
 #include <stdbool.h>
-#include "math/vec4.h"
+#include "engine/math/vec4.h"
 
 /* ============================================================================
  * CONSTANTES FÍSICAS IAU 2015
@@ -67,18 +67,18 @@
  * Essencial para simulações de longo prazo.
  */
 
-struct bhs_kahan {
+struct ri_kahan {
 	double sum;
 	double c; /* compensation */
 };
 
-static inline void bhs_kahan_init(struct bhs_kahan *k)
+static inline void ri_kahan_init(struct ri_kahan *k)
 {
 	k->sum = 0.0;
 	k->c = 0.0;
 }
 
-static inline void bhs_kahan_add(struct bhs_kahan *k, double value)
+static inline void ri_kahan_add(struct ri_kahan *k, double value)
 {
 	double y = value - k->c;
 	double t = k->sum + y;
@@ -86,36 +86,36 @@ static inline void bhs_kahan_add(struct bhs_kahan *k, double value)
 	k->sum = t;
 }
 
-static inline double bhs_kahan_get(const struct bhs_kahan *k)
+static inline double ri_kahan_get(const struct ri_kahan *k)
 {
 	return k->sum;
 }
 
 /* Versão vetorial */
-struct bhs_kahan_vec3 {
-	struct bhs_kahan x, y, z;
+struct ri_kahan_vec3 {
+	struct ri_kahan x, y, z;
 };
 
-static inline void bhs_kahan_vec3_init(struct bhs_kahan_vec3 *k)
+static inline void ri_kahan_vec3_init(struct ri_kahan_vec3 *k)
 {
-	bhs_kahan_init(&k->x);
-	bhs_kahan_init(&k->y);
-	bhs_kahan_init(&k->z);
+	ri_kahan_init(&k->x);
+	ri_kahan_init(&k->y);
+	ri_kahan_init(&k->z);
 }
 
-static inline void bhs_kahan_vec3_add(struct bhs_kahan_vec3 *k,
-				      struct bhs_vec3 v)
+static inline void ri_kahan_vec3_add(struct ri_kahan_vec3 *k,
+				      struct ri_vec3 v)
 {
-	bhs_kahan_add(&k->x, v.x);
-	bhs_kahan_add(&k->y, v.y);
-	bhs_kahan_add(&k->z, v.z);
+	ri_kahan_add(&k->x, v.x);
+	ri_kahan_add(&k->y, v.y);
+	ri_kahan_add(&k->z, v.z);
 }
 
-static inline struct bhs_vec3 bhs_kahan_vec3_get(const struct bhs_kahan_vec3 *k)
+static inline struct ri_vec3 ri_kahan_vec3_get(const struct ri_kahan_vec3 *k)
 {
-	return (struct bhs_vec3){ .x = bhs_kahan_get(&k->x),
-				  .y = bhs_kahan_get(&k->y),
-				  .z = bhs_kahan_get(&k->z) };
+	return (struct ri_vec3){ .x = ri_kahan_get(&k->x),
+				  .y = ri_kahan_get(&k->y),
+				  .z = ri_kahan_get(&k->z) };
 }
 
 /* ============================================================================
@@ -123,21 +123,21 @@ static inline struct bhs_vec3 bhs_kahan_vec3_get(const struct bhs_kahan_vec3 *k)
  * ============================================================================
  */
 
-#define BHS_MAX_BODIES 128
+#define RI_MAX_BODIES 128
 
 /**
  * Estado de um corpo para integração
  */
-struct bhs_body_state_rk {
-	struct bhs_vec3 pos;
-	struct bhs_vec3 vel;
+struct ri_body_state_rk {
+	struct ri_vec3 pos;
+	struct ri_vec3 vel;
 	double mass;
 	double gm;     /* GM = G * mass (pré-calculado) */
 	double radius; /* Raio Equatorial (p/ J2) */
 	double j2;     /* Termo J2 (achatamento) */
 
 	/* [NEW] Rotational State (6-DOF) */
-	struct bhs_vec3 rot_vel; /* Velocidade Angular (rad/s) */
+	struct ri_vec3 rot_vel; /* Velocidade Angular (rad/s) */
 	double inertia;		 /* Momento de Inércia (kg*m^2) */
 
 	bool is_fixed;
@@ -147,8 +147,8 @@ struct bhs_body_state_rk {
 /**
  * Sistema completo para integração
  */
-struct bhs_system_state {
-	struct bhs_body_state_rk bodies[BHS_MAX_BODIES];
+struct ri_system_state {
+	struct ri_body_state_rk bodies[RI_MAX_BODIES];
 	int n_bodies;
 	double time;
 };
@@ -156,9 +156,9 @@ struct bhs_system_state {
 /**
  * Derivada do estado (acelerações)
  */
-struct bhs_system_derivative {
-	struct bhs_vec3 vel[BHS_MAX_BODIES]; /* dr/dt = v */
-	struct bhs_vec3 acc[BHS_MAX_BODIES]; /* dv/dt = a */
+struct ri_system_derivative {
+	struct ri_vec3 vel[RI_MAX_BODIES]; /* dr/dt = v */
+	struct ri_vec3 acc[RI_MAX_BODIES]; /* dv/dt = a */
 };
 
 /* ============================================================================
@@ -167,17 +167,17 @@ struct bhs_system_derivative {
  */
 
 /**
- * bhs_integrator_rk4 - Runge-Kutta 4ª ordem clássico
+ * ri_integrator_rk4 - Runge-Kutta 4ª ordem clássico
  * @state: Estado atual do sistema (modificado in-place)
  * @dt: Timestep
  *
  * RK4 tem erro local O(dt⁵) e erro global O(dt⁴).
  * Muito mais preciso que Euler para o mesmo dt.
  */
-void bhs_integrator_rk4(struct bhs_system_state *state, double dt);
+void ri_integrator_rk4(struct ri_system_state *state, double dt);
 
 /**
- * bhs_integrator_leapfrog - Störmer-Verlet simplético
+ * ri_integrator_leapfrog - Störmer-Verlet simplético
  * @state: Estado atual do sistema (modificado in-place)
  * @dt: Timestep
  *
@@ -195,10 +195,10 @@ void bhs_integrator_rk4(struct bhs_system_state *state, double dt);
  *
  * RECOMENDADO para simulações gravitacionais.
  */
-void bhs_integrator_leapfrog(struct bhs_system_state *state, double dt);
+void ri_integrator_leapfrog(struct ri_system_state *state, double dt);
 
 /**
- * bhs_integrator_rkf45 - Runge-Kutta-Fehlberg adaptativo
+ * ri_integrator_rkf45 - Runge-Kutta-Fehlberg adaptativo
  * @state: Estado atual do sistema
  * @dt: Timestep sugerido (será ajustado)
  * @tolerance: Erro máximo tolerado por passo
@@ -206,11 +206,11 @@ void bhs_integrator_leapfrog(struct bhs_system_state *state, double dt);
  *
  * Retorna: Erro estimado do passo atual
  */
-double bhs_integrator_rkf45(struct bhs_system_state *state, double dt,
+double ri_integrator_rkf45(struct ri_system_state *state, double dt,
 			    double tolerance, double *dt_out);
 
 /**
- * bhs_integrator_yoshida - Integrador Simplético de 4ª Ordem
+ * ri_integrator_yoshida - Integrador Simplético de 4ª Ordem
  * @state: Estado atual
  * @dt: Timestep
  *
@@ -218,21 +218,21 @@ double bhs_integrator_rkf45(struct bhs_system_state *state, double dt,
  * Erro O(dt^4), conserva energia melhor que RK4.
  * Custo: 3 avaliações de força por passo (vs 1 do Leapfrog, 4 do RK4).
  */
-void bhs_integrator_yoshida(struct bhs_system_state *state, double dt);
+void ri_integrator_yoshida(struct ri_system_state *state, double dt);
 
 /**
- * bhs_compute_accelerations - Calcula acelerações gravitacionais
+ * ri_compute_accelerations - Calcula acelerações gravitacionais
  * @state: Estado do sistema
  * @acc: Array de acelerações (output)
  *
  * Usa Kahan summation para precisão máxima.
  * Inclui softening para evitar singularidade.
  */
-void bhs_compute_accelerations(const struct bhs_system_state *state,
-			       struct bhs_vec3 acc[]);
+void ri_compute_accelerations(const struct ri_system_state *state,
+			       struct ri_vec3 acc[]);
 
 /**
- * bhs_compute_1pn_correction - Calcula correção relativística 1PN
+ * ri_compute_1pn_correction - Calcula correção relativística 1PN
  * @gm_central: GM do corpo central (m³/s² ou unidades naturais)
  * @pos: Posição relativa ao corpo central
  * @vel: Velocidade do corpo
@@ -243,55 +243,55 @@ void bhs_compute_accelerations(const struct bhs_system_state *state,
  * Esta correção causa a precessão do periélio (ex: Mercúrio ~43"/século).
  * Fórmula: a_1PN = (GM/r²c²) * [4GM/r - v² + 4(v·r̂)²] * r̂ + 4(v·r̂)(GM/r²c²) * v̂
  */
-struct bhs_vec3 bhs_compute_1pn_correction(double gm_central,
-					   struct bhs_vec3 pos,
-					   struct bhs_vec3 vel, double c);
+struct ri_vec3 ri_compute_1pn_correction(double gm_central,
+					   struct ri_vec3 pos,
+					   struct ri_vec3 vel, double c);
 
 /**
- * bhs_compute_j2_correction - Calcula perturbação J2 (Oblateness)
+ * ri_compute_j2_correction - Calcula perturbação J2 (Oblateness)
  * @gm_central: GM do corpo central
  * @j2: Coeficiente J2
  * @r_eq: Raio equatorial do corpo
  * @pos: Posição relativa
  */
-struct bhs_vec3 bhs_compute_j2_correction(double gm_central, double j2,
-					  double r_eq, struct bhs_vec3 pos);
+struct ri_vec3 ri_compute_j2_correction(double gm_central, double j2,
+					  double r_eq, struct ri_vec3 pos);
 
 /**
- * bhs_compute_torques - Calcula Torques (Maré + Outros)
+ * ri_compute_torques - Calcula Torques (Maré + Outros)
  * @state: Estado do sistema
  * @torques: Array de torques (output)
  */
-void bhs_compute_torques(const struct bhs_system_state *state,
-			 struct bhs_vec3 torques[]);
+void ri_compute_torques(const struct ri_system_state *state,
+			 struct ri_vec3 torques[]);
 
 /* ============================================================================
  * INVARIANTES (CONSERVAÇÃO)
  * ============================================================================
  */
 
-struct bhs_invariants {
+struct ri_invariants {
 	double energy;			  /* Energia total (K + U) */
-	struct bhs_vec3 momentum;	  /* Momento linear total */
-	struct bhs_vec3 angular_momentum; /* Momento angular total */
+	struct ri_vec3 momentum;	  /* Momento linear total */
+	struct ri_vec3 angular_momentum; /* Momento angular total */
 };
 
 /**
- * bhs_compute_invariants - Calcula quantidades conservadas
+ * ri_compute_invariants - Calcula quantidades conservadas
  */
-void bhs_compute_invariants(const struct bhs_system_state *state,
-			    struct bhs_invariants *inv);
+void ri_compute_invariants(const struct ri_system_state *state,
+			    struct ri_invariants *inv);
 
 /**
- * bhs_check_conservation - Verifica se invariantes estão conservados
+ * ri_check_conservation - Verifica se invariantes estão conservados
  * @initial: Invariantes no tempo t=0
  * @current: Invariantes atuais
  * @tolerance: Desvio máximo permitido (fração)
  *
  * Retorna: true se dentro da tolerância
  */
-bool bhs_check_conservation(const struct bhs_invariants *initial,
-			    const struct bhs_invariants *current,
+bool ri_check_conservation(const struct ri_invariants *initial,
+			    const struct ri_invariants *current,
 			    double tolerance);
 
-#endif /* BHS_ENGINE_INTEGRATOR_H */
+#endif /* RI_ENGINE_INTEGRATOR_H */

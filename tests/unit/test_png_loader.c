@@ -54,7 +54,7 @@ int main()
     fwrite(PNG_1x1_RED, 1, sizeof(PNG_1x1_RED), f);
     fclose(f);
 
-    bhs_image_t img = bhs_image_load(tmp_path);
+    ri_image_t img = ri_image_load(tmp_path);
     
     if (!img.data) {
         fprintf(stderr, "[FAIL] Imagem nula.\n");
@@ -77,7 +77,7 @@ int main()
         return 1;
     }
 
-    bhs_image_free(img);
+    ri_image_free(img);
     remove(tmp_path);
     printf("[PASS] Sucesso!\n");
     return 0;
